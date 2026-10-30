@@ -83,6 +83,11 @@ Verified on 2026-10-30:
   runtime fixes below. A standalone model-check run also passed.
 - Five model checks watch lost rapid changes, stale failure delivery, partial
   proxy writes, accidental live bindings in a draft, and missing icon metadata.
+- The Visual Studio solution includes the sample, library, model checks and
+  original TableView/Lucide projects. Its Debug/x64 IDE build succeeded for all
+  five projects. The solution-based `Build.ps1` also passed its build and five
+  checks. The local dependency path stays in ignored configuration; shared
+  component source remains in TinyTorrent2.
 - A real packaged x64 WinUI sample launched. A bounded UI probe checked an
   individual toggle against the isolated file, proxy dependencies, draft
   isolation, Cancel with no write, atomic Save of address and port, numeric

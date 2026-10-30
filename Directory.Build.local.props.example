@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup>
+    <ComponentsRoot>C:\path\to\TinyTorrent2</ComponentsRoot>
+  </PropertyGroup>
+</Project>

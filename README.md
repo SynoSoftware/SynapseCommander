@@ -8,6 +8,13 @@ File operations use the shared Rust engine, loaded as an application-local DLL.
 There is no additional engine executable or service. The existing indexing
 service remains responsible for indexing and search.
 
+## Visual Studio
+
+Open [SynapseCommander.sln](SynapseCommander.sln), select **Debug | x64**, and
+set **SettingsSample** as the startup project. The solution contains the
+settings prototype, its library and model checks; the file manager is planned.
+See the [sample setup](lib/Settings/README.md#visual-studio) for shared dependencies.
+
 ## Plans
 
 - [Product and feature inventory](PRODUCT.md): existing capabilities, additions

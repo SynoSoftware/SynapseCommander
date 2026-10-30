@@ -15,7 +15,7 @@ pwsh ./Build.ps1 -ComponentsRoot C:\SynoSoftware\TinyTorrent2 -Launch
 
 `ComponentsRoot` explicitly names the existing TableView/Lucide source checkout.
 The projects contain no machine-specific default or copied implementation.
-Build outputs are directed into this workspace's ignored `artifacts/` directory.
+Command-line build outputs go into this workspace's ignored `artifacts/` directory.
 The sample is a development host, not an additional shipped engine executable.
 
 The sample's host stores its own demonstration preferences at
@@ -23,6 +23,30 @@ The sample's host stores its own demonstration preferences at
 `-DataDirectory <temporary folder>` for an isolated run. The component itself
 does no file I/O. The proxy and file-operation preferences demonstrate editing;
 they do not configure a real proxy or connect the Rust engine.
+
+## Visual Studio
+
+Open `SynapseCommander.sln` at the repository root. Select **Debug | x64**,
+set **SettingsSample** as the startup project, and use its packaged launch
+profile. Debug/Release configurations also include ARM64; x64 is the verified
+development target.
+
+The solution expects TinyTorrent2 beside SynapseCommander and includes the
+original TableView and Lucide projects under Shared components. Their source is
+not copied. Visual Studio builds those projects in TinyTorrent2's own ignored
+`artifacts/` directory; this solution's projects build into its own `artifacts/`.
+
+The matching dependency path is already configured on this machine in ignored
+`Directory.Build.local.props`. On another checkout, copy
+`Directory.Build.local.props.example` to that filename and set `ComponentsRoot`
+to that sibling TinyTorrent2 checkout. This supplies the same property as the build
+script's argument without committing a developer's absolute path.
+
+`Build.ps1` builds the solution and runs the model checks. Its explicit
+`ComponentsRoot` argument must identify the same checkout as the solution's
+shared projects. It directs all command-line outputs into this workspace.
+Visual Studio builds all five projects itself; no preliminary script run is
+needed after the local dependency path is configured.
 
 ## Declare content
 
