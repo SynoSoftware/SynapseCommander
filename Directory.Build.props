@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
+    <Nullable>enable</Nullable>
+    <Platforms>x64;ARM64</Platforms>
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/bin/**;**/obj/**;**/bin-fl/**;**/TestResults/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

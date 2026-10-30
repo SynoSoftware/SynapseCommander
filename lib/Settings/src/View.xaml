@@ -1,0 +1,36 @@
+<UserControl x:Class="Syno.Settings.View"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{ThemeResource ControlCornerRadius}" />
+        </Style>
+    </UserControl.Resources>
+    <NavigationView x:Name="Navigation" IsBackButtonVisible="Collapsed" IsSettingsVisible="False"
+                    OpenPaneLength="240" CompactPaneLength="64" IsPaneToggleButtonVisible="False"
+                    ExpandedModeThresholdWidth="1000" CompactModeThresholdWidth="0"
+                    SelectionChanged="OnCategory" ItemInvoked="OnFooter">
+        <NavigationView.AutoSuggestBox>
+            <AutoSuggestBox x:Name="Search" PlaceholderText="Find a setting" TextChanged="OnSearch"
+                            SuggestionChosen="OnSuggestion" AutomationProperties.AutomationId="SettingsSearch" />
+        </NavigationView.AutoSuggestBox>
+        <NavigationView.FooterMenuItems>
+            <NavigationViewItem x:Name="Advanced" Content="Advanced mode" SelectsOnInvoked="False"
+                                AutomationProperties.AutomationId="SettingsAdvanced" />
+        </NavigationView.FooterMenuItems>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <InfoBar x:Name="Failure" IsOpen="False" Severity="Error" Margin="24,8" />
+            <ScrollViewer x:Name="Scroll" Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="Body" MaxWidth="1200" Margin="24" Spacing="24"
+                            HorizontalAlignment="Stretch" />
+            </ScrollViewer>
+        </Grid>
+    </NavigationView>
+</UserControl>

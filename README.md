@@ -1,0 +1,31 @@
+# SynapseCommander
+
+SynapseCommander is a new C#/WinUI 3 file manager for Windows, developed by
+SynoSoftware. Its baseline is the complete working feature set of gozler-ui,
+with the everyday improvements in the product plan.
+
+File operations use the shared Rust engine, loaded as an application-local DLL.
+There is no additional engine executable or service. The existing indexing
+service remains responsible for indexing and search.
+
+## Plans
+
+- [Product and feature inventory](PRODUCT.md): existing capabilities, additions
+  and the scope of parity.
+- [Architecture](docs/ARCHITECTURE.md): ownership, shared code, native interop
+  and application lifetime.
+- [Implementation plan](docs/plans/synapsecommander.md): ordered stages,
+  dependencies and completion criteria.
+- [Contributor guidance](AGENTS.md): coding, naming and verification.
+- [Settings component](lib/Settings/README.md): the current WinUI library trial,
+  its shared presentation language, sample and TableView integration.
+
+These documents describe planned work, not an implemented WinUI application.
+The superseded Rust extraction and inherited tooling and documents have been
+removed. The reusable Settings component and sample are being developed here;
+the complete WinUI file manager and Rust-library integration remain pending.
+
+The shared engine's source currently lives in the separate goz working folder,
+`C:\SynoSoftware\TinyTorrent2\3rdParty\goz`. SynapseCommander will consume
+versioned engine artifacts without copying that source or importing goz history.
+Existing license notices remain with any reused code.
