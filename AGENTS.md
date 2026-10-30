@@ -8,7 +8,8 @@ reading. One responsibility has one authority and one implementation.
 
 - Read [PRODUCT.md](PRODUCT.md) for scope and vocabulary.
 - Read [architecture](docs/ARCHITECTURE.md) before changing ownership, native
-  interop, background work, persistence, search or operation lifetime.
+  interop, background work, persistence, search, operation lifetime, shared
+  dependency sourcing or release distribution.
 - Read the relevant stage of the
   [implementation plan](docs/plans/synapsecommander.md) before implementation.
 - Before changing settings, dialogs or their declarations, read the

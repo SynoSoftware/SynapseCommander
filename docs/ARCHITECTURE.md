@@ -30,11 +30,12 @@ shared Rust index client --> existing compatible indexing service
 
 Initially keep the shared implementation and native exports in the goz
 repository, currently `C:\SynoSoftware\TinyTorrent2\3rdParty\goz`.
-Publish a versioned native artifact and contract from there. SynapseCommander
-references a pinned release; it does not vendor crates, copy algorithms, import
-goz history or build against a developer's absolute checkout path.
-Separate products may ship different pinned versions; engine fixes are made
-once, then adopted through normal dependency updates.
+Build the DLL from that source owner and include the matching output in the
+application's release. Record the source revision used; publishing a separate
+library package is not a prerequisite. SynapseCommander does not vendor crates,
+copy algorithms or import goz history. Build configuration locates the source
+checkout without committing a developer's absolute path. Engine fixes are made
+once and each product deliberately adopts the selected revision.
 
 ## Responsibility map
 
@@ -166,14 +167,37 @@ silently alter them.
 
 ## Dependency and release contract
 
-Ship the pinned DLL and matching managed contract with the application, resolved
-from its controlled install location. Record engine revision, ABI version,
-architecture and checksums in release metadata. Retain required license notices.
-Do not search PATH or the current folder for a substitute DLL.
+Follow TinyTorrent2's installer approach, documented in its `installer/README.md`:
+an unpackaged desktop application delivered as a per-user Inno Setup `.exe`
+installer through GitHub Releases. The installer checks the required .NET and
+Windows App Runtime versions and obtains missing prerequisites. Installer
+generation and publication are separate actions.
+
+Build shared C# libraries through project references to their original source
+owners. Build the Rust DLL through its original source owner. The application
+release includes their assemblies/DLL, XAML resources, fonts, assets and required
+license notices. Separate NuGet/native package publication and a package feed
+are not prerequisites for reuse or release. Existing third-party NuGet
+dependencies retain their normal restore workflow.
+
+One product release version identifies the application and installer. Record
+the shared source revisions, ABI version, architecture and checksums in release
+metadata. Load the matching DLL from the controlled installation directory;
+do not search PATH or the current folder for a substitute.
+
+Plan a root `Release.cmd` entry point and `installer/Build.ps1`, following
+TinyTorrent's build, publish, validation, optional signing and installer staging
+flow.
+Use SynapseCommander's own identity and operation-safe upgrade/shutdown behavior.
+The installer carries the application and its in-process libraries, with no
+additional engine executable or service. These release tools are not implemented
+yet. The current Settings sample is a development host and does not
+establish the production distribution model.
 
 The initial vertical slice targets x64. Choose supported Windows/.NET/Windows
-App SDK versions and packaging from verified toolchain/platform requirements in
-the foundation stage. Each additional architecture needs its matching artifact.
+App SDK versions and runtime requirements from verified toolchain/platform
+requirements in the foundation stage. Each additional architecture needs its
+matching binaries.
 
 Missing/incompatible engine artifacts give an actionable startup error before
 mutations. Missing/incompatible indexing service affects indexed features;

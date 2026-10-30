@@ -4,7 +4,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
 using SystemTask = System.Threading.Tasks.Task;
-using NativeExpander = Microsoft.UI.Xaml.Controls.Expander;
 
 namespace Syno.Settings;
 
@@ -14,12 +13,14 @@ public sealed partial class View : UserControl
     private IReadOnlyDictionary<string, Func<FrameworkElement>> _tasks = new Dictionary<string, Func<FrameworkElement>>();
     private readonly List<RowView> _rows = [];
     private readonly Dictionary<string, FrameworkElement> _targets = [];
-    private readonly Dictionary<string, NativeExpander> _expanders = [];
+    private readonly Dictionary<string, Controls.Expander> _expanders = [];
     private readonly Dictionary<string, bool> _expanded = [];
     private readonly Dictionary<string, double> _positions = [];
     private readonly List<Value> _sources = [];
     private readonly List<Action> _refresh = [];
+    private readonly List<Action> _disclosure = [];
     private readonly Dictionary<string, NavigationViewItem> _categories = [];
+    private readonly Controls.Motion _motion = new();
     private Header? _header;
     private Category? _category;
     private bool _advanced;
@@ -30,6 +31,8 @@ public sealed partial class View : UserControl
     {
         InitializeComponent();
         Advanced.Icon = Icon(Lucide.Square, 24);
+        AutomationProperties.SetItemStatus(Advanced, "Off");
+        PageHost.SizeChanged += Controls.Motion.Clip;
         Loaded += (_, _) => Attach();
         Unloaded += (_, _) => Detach();
     }
@@ -39,6 +42,7 @@ public sealed partial class View : UserControl
         tasks ??= new Dictionary<string, Func<FrameworkElement>>();
         catalog.Validate(tasks.Keys.ToHashSet(StringComparer.Ordinal));
         Detach();
+        _category = null;
         _catalog = catalog;
         _tasks = tasks;
         _sources.Clear();
@@ -49,7 +53,12 @@ public sealed partial class View : UserControl
         _categories.Clear();
         foreach (var category in catalog.Categories)
         {
-            var item = new NavigationViewItem { Content = category.Title, Icon = Icon(category.Icon, 24), Tag = category };
+            var item = new NavigationViewItem
+            {
+                Content = new TextBlock { Text = category.Title, Style = (Style)Resources["NavigationLabel"] },
+                Icon = Icon(category.Icon, 24), Tag = category
+            };
+            AutomationProperties.SetName(item, category.Title);
             AutomationProperties.SetAutomationId(item, "category." + category.Key);
             _categories.Add(category.Key, item);
             Navigation.MenuItems.Add(item);
@@ -82,6 +91,7 @@ public sealed partial class View : UserControl
 
     private void Detach()
     {
+        _motion.Stop();
         foreach (var source in _sources)
         {
             source.Changed -= OnValue;
@@ -109,12 +119,24 @@ public sealed partial class View : UserControl
     {
         if (args.SelectedItem is not NavigationViewItem { Tag: Category category })
             return;
+        if (ReferenceEquals(_category, category))
+            return;
         foreach (var row in _rows)
             row.Commit();
-        if (_category is not null)
-            _positions[_category.Key] = Scroll.VerticalOffset;
-        Render(category);
-        Scroll.ChangeView(null, _positions.GetValueOrDefault(category.Key), null, true);
+        var previous = _category;
+        if (previous is not null)
+            _positions[previous.Key] = Scroll.VerticalOffset;
+        void Update()
+        {
+            Render(category);
+            Scroll.ChangeView(null, _positions.GetValueOrDefault(category.Key), null, true);
+        }
+        if (previous is null)
+            Update();
+        else
+            _motion.Enter(PageContent,
+                forward: Navigation.MenuItems.IndexOf(_categories[category.Key]) >= Navigation.MenuItems.IndexOf(_categories[previous.Key]),
+                update: Update);
     }
 
     private void Render(Category category)
@@ -124,12 +146,13 @@ public sealed partial class View : UserControl
         _targets.Clear();
         _expanders.Clear();
         _refresh.Clear();
+        _disclosure.Clear();
         Body.Children.Clear();
         _header = new Header(category);
-        Body.Children.Add(_header);
-        foreach (var block in category.Blocks.Where(block => _advanced || !block.IsAdvanced))
+        Overview.Content = _header;
+        foreach (var block in category.Blocks)
         {
-            var rows = block.Fields.Where(row => _advanced || !row.IsAdvanced).ToArray();
+            var rows = block.Fields.ToArray();
             if (block is not Workflow and not ITransaction && rows.Length == 0)
                 continue;
             FrameworkElement surface;
@@ -144,20 +167,26 @@ public sealed partial class View : UserControl
                     surface = Card(Rows(rows));
                     groupLayout.Children.Add(surface);
                     Body.Children.Add(groupLayout);
-                    Track(block, rows, surface);
+                    Track(block, rows, surface, groupLayout);
                     continue;
                 case Expander expander:
                     var heading = new StackPanel { Spacing = 4 };
-                    heading.Children.Add(Heading(expander.Title));
-                    var detail = new TextBlock { FontSize = 14, TextTrimming = TextTrimming.CharacterEllipsis };
+                    var title = Heading(expander.Title);
+                    title.FontWeight = Microsoft.UI.Text.FontWeights.Normal;
+                    heading.Children.Add(title);
+                    var detail = new TextBlock { FontSize = 14, Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], TextTrimming = TextTrimming.CharacterEllipsis };
                     heading.Children.Add(detail);
-                    var native = new NativeExpander
+                    var subject = Subject(expander.Icon, heading);
+                    subject.MinHeight = 68;
+                    var native = new Controls.Expander
                     {
-                        Header = Subject(expander.Icon, heading), Content = Rows(rows),
+                        Style = (Style)Resources["Expander"],
+                        Header = subject, Content = Rows(rows), Padding = new Thickness(0),
                         HorizontalAlignment = HorizontalAlignment.Stretch,
                         HorizontalContentAlignment = HorizontalAlignment.Stretch,
                         IsExpanded = _expanded.GetValueOrDefault(block.Key)
                     };
+                    AutomationProperties.SetName(native, expander.Title);
                     void Update()
                     {
                         detail.Text = expander.Detail switch { Detail.Summary summary => summary.Read(), Detail.Consequence consequence => consequence.Text, _ => "" };
@@ -202,27 +231,50 @@ public sealed partial class View : UserControl
             Body.Children.Add(surface);
             Track(block, rows, surface);
         }
+        UpdateDisclosure();
     }
 
-    private void Track(Block block, Row[] rows, FrameworkElement surface)
+    private void Track(Block block, Row[] rows, FrameworkElement surface, FrameworkElement? container = null)
     {
         AutomationProperties.SetAutomationId(surface, block.Key);
         _targets[block.Key] = surface;
         foreach (var row in rows)
             _targets[row.Key] = surface;
+        container ??= surface;
+        _disclosure.Add(() => container.Visibility = (_advanced || !block.IsAdvanced)
+            && (block is Workflow or ITransaction || rows.Any(row => _advanced || !row.IsAdvanced))
+                ? Visibility.Visible : Visibility.Collapsed);
     }
 
     private StackPanel Rows(IEnumerable<Row> rows, string? icon = null)
     {
-        var panel = new StackPanel();
+        var panel = new StackPanel { Margin = new Thickness(16, 0, 16, 0) };
+        var entries = new List<(Row Row, RowView View, Border? Separator)>();
         foreach (var row in rows)
         {
+            Border? separator = null;
             if (panel.Children.Count > 0)
-                panel.Children.Add(new Border { Height = 1, Background = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"] });
+            {
+                separator = new Border { Height = 1, Background = (Brush)Application.Current.Resources["DividerStrokeColorDefaultBrush"] };
+                panel.Children.Add(separator);
+            }
             var view = new RowView(row, icon);
             _rows.Add(view);
             panel.Children.Add(view);
+            entries.Add((row, view, separator));
         }
+        _disclosure.Add(() =>
+        {
+            var preceding = false;
+            foreach (var (row, view, separator) in entries)
+            {
+                var visible = _advanced || !row.IsAdvanced;
+                view.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+                if (separator is not null)
+                    separator.Visibility = visible && preceding ? Visibility.Visible : Visibility.Collapsed;
+                preceding |= visible;
+            }
+        });
         return panel;
     }
 
@@ -249,6 +301,7 @@ public sealed partial class View : UserControl
         grid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         grid.Children.Add(Icon(glyph, 20));
+        ((FrameworkElement)content).VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn((FrameworkElement)content, 1);
         grid.Children.Add(content);
         return grid;
@@ -258,12 +311,26 @@ public sealed partial class View : UserControl
     {
         if (args.InvokedItemContainer != Advanced)
             return;
-        foreach (var row in _rows)
-            row.Commit();
-        _advanced = !_advanced;
-        Advanced.Icon = Icon(_advanced ? Lucide.SquareCheck : Lucide.Square, 24);
-        if (_category is not null)
-            Render(_category);
+        ShowAdvanced(!_advanced);
+    }
+
+    private void ShowAdvanced(bool show)
+    {
+        if (_advanced == show)
+            return;
+        if (!show)
+            foreach (var row in _rows)
+                row.Commit();
+        _advanced = show;
+        ((FontIcon)Advanced.Icon).Glyph = show ? Lucide.SquareCheck : Lucide.Square;
+        AutomationProperties.SetItemStatus(Advanced, show ? "On" : "Off");
+        UpdateDisclosure();
+    }
+
+    private void UpdateDisclosure()
+    {
+        foreach (var update in _disclosure)
+            update();
     }
 
     private sealed record Destination(Category Category, Block Block, Row? Row)
@@ -296,12 +363,8 @@ public sealed partial class View : UserControl
         var destination = Destinations().FirstOrDefault(item => item.Row?.Key == key || item.Block.Key == key)
             ?? throw new ArgumentException($"Unknown setting '{key}'.");
         if (destination.Block.IsAdvanced || destination.Row?.IsAdvanced == true)
-        {
-            _advanced = true;
-            Advanced.Icon = Icon(Lucide.SquareCheck, 24);
-        }
+            ShowAdvanced(true);
         Navigation.SelectedItem = _categories[destination.Category.Key];
-        Render(destination.Category);
         if (_expanders.TryGetValue(destination.Block.Key, out var expander))
             expander.IsExpanded = true;
         DispatcherQueue.TryEnqueue(() =>

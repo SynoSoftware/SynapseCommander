@@ -33,6 +33,12 @@ removed. The reusable Settings component and sample are being developed here;
 the complete WinUI file manager and Rust-library integration remain pending.
 
 The shared engine's source currently lives in the separate goz working folder,
-`C:\SynoSoftware\TinyTorrent2\3rdParty\goz`. SynapseCommander will consume
-versioned engine artifacts without copying that source or importing goz history.
+`C:\SynoSoftware\TinyTorrent2\3rdParty\goz`. SynapseCommander will build and ship
+the shared DLL without copying its implementation or importing goz history.
 Existing license notices remain with any reused code.
+
+Distribution will follow TinyTorrent2: a per-user Inno Setup `.exe` installer
+published through GitHub Releases. Shared libraries ship with the application;
+publishing them as separate packages is not required. The
+[architecture](docs/ARCHITECTURE.md#dependency-and-release-contract) owns the
+release design; the installer is not implemented yet.

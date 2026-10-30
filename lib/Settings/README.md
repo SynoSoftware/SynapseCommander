@@ -27,7 +27,7 @@ they do not configure a real proxy or connect the Rust engine.
 ## Visual Studio
 
 Open `SynapseCommander.sln` at the repository root. Select **Debug | x64**,
-set **SettingsSample** as the startup project, and use its packaged launch
+set **SettingsSample** as the startup project, and use its unpackaged launch
 profile. Debug/Release configurations also include ARM64; x64 is the verified
 development target.
 
@@ -76,8 +76,8 @@ and registered rich task content. The sample includes the real TableView.
 The complete contract also calls for shared adaptive row layout, localization
 integration, full reveal outlining, role-token consolidation, host notification
 handoff, global-search integration, richer workflow navigation/action slots,
-shared dialog button icons, theme previews, and TinyTorrent's shared
-motion/decoration treatment. These are
+shared dialog button icons, theme previews, and the remaining decorative
+treatment. These are
 not established by the first sample. Hardware measurement, speed testing and
 the production file-manager engine are outside this component trial.
 
@@ -86,10 +86,21 @@ Build, model checks and rendered verification are reported there after they run.
 The model checks compile the exact non-UI source files, with no duplicate model
 implementation and no running application/service requirement.
 
+TinyTorrent's expander and category motion are copied with their matching
+template/clipping. Advanced mode updates visibility in place and preserves the
+existing controls. With a freshly launched sample (Advanced mode off), run
+`pwsh ./lib/Settings/tests/Advanced.ps1 -AppPid <sample PID>` from the repository
+root. This bounded WinApp UI check activates the footer through Enter, verifies
+the advanced row appears/disappears, and checks that editor/expander identities
+and expansion survive both toggles. It takes no screenshots or recordings and
+does not change stored preferences. SelectionItemPattern alone selects a
+navigation item; it does not activate this nonselecting footer command.
+
 ## Reuse
 
 Settings owns presentation and commit mechanics; the host supplies typed domain
 values, actual validation, commands, localization and persistence. TableView
-retains table authority. Package publication and TinyTorrent migration are
-separate steps after the sample satisfies the contract; no TinyTorrent source
-was changed for this trial.
+retains table authority. Consumers use source project references and ship the
+compiled libraries/resources with their application installer; separate package
+publication is not required. TinyTorrent migration remains a separate step after
+the sample satisfies the contract; no TinyTorrent source was changed for this trial.

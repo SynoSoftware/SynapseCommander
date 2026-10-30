@@ -93,7 +93,9 @@ Use native NavigationView semantics. Category icons occupy the native icon
 slot at 24 DIPs and retain accessible names in the compact rail. Category
 selection keeps a stable content viewport; it does not reset unrelated work.
 
-The title sits above artwork/context and up to two current facts. Artwork is
+Use TinyTorrent's overview: artwork beside the category title/context, with up
+to two current facts aligned alongside when space permits. A distinct page
+heading above that overview is optional, not a repeated category name. Artwork is
 required even when context text is absent. Optional subject/context must say
 something useful about the category; omit a generic product/version sentence.
 Every fact has an icon. Facts read confirmed state from existing owners and
@@ -163,6 +165,18 @@ an action column only for related actions. Icons center on the whole text block
 and do not enlarge the container. Cards retain native themed fill, stroke and
 rounding; nested rows use separators rather than nested card borders.
 
+Preserve TinyTorrent's expander code and matching template together: animate
+the clipped drawer's height for 260 ms opening (cubic ease out) and 220 ms closing
+(cubic ease in/out), including interruption, content remeasurement, unload and
+the system animation preference. The header stays centered while a collapsed
+summary disappears. A stock or Toolkit expander is not proof of equivalent motion.
+
+Category changes use TinyTorrent's shared `Motion.Enter` implementation: a
+250 ms cubic ease-out horizontal slide, forward or backward according to the
+category order. Clip at the page host so moving content stays outside the
+navigation pane. Preserve interrupted-transition cleanup and respect the
+system animation preference. Stop motion when the view detaches.
+
 Labels, values and short feedback stay single-line and expose their full text
 through keyboard-accessible help, selection or an accessible description.
 At narrow widths, stack trailing editors through one shared rule before they
@@ -173,6 +187,13 @@ Keep dependent fields visible and disabled with an accessible reason. Advanced
 mode is a separate discoverability policy: hide deliberate tuning/diagnostics,
 retain their values and include them in search. A custom workflow may have
 state-specific content; that does not authorize each field to hide its siblings.
+
+Advanced mode changes visibility in place, as TinyTorrent does. Keep the
+category overview, existing editors, workflow controls and expanders mounted;
+do not clear/rebuild the page or restart page-entry motion. Preserve input,
+expansion and view state. Hide a group's heading with its body, and show row
+separators only between visible rows. Footer invocation and search reveal use
+the same disclosure owner; changing the footer state updates its existing icon.
 
 ### Editors
 
@@ -277,9 +298,11 @@ control supplies its specialized body, not a replacement settings shell.
 
 TableView remains authoritative for table behavior. During development the sample
 references TinyTorrent2's existing project through `ComponentsRoot`, without
-copying its source. Distribution should use pinned component packages, including
-their assets/licenses and compatible WinUI dependencies. Publishing packages
-and migrating TinyTorrent are separate work, not implied by a local source reference.
+copying its source. Consumers build shared source projects and include their
+assemblies, resources, assets and licenses in their application release, under
+the [release contract](../../../docs/ARCHITECTURE.md#dependency-and-release-contract).
+Separate component package publication is not required. Migrating TinyTorrent
+remains separate work, not implied by a local source reference.
 
 ## Enforcement and acceptance
 

@@ -35,12 +35,13 @@ internal sealed partial class RowView : UserControl
             Identity.FontFamily = Lucide.Font;
             Identity.Glyph = icon;
             Identity.Visibility = Visibility.Visible;
+            Identity.Margin = new Thickness(0, 0, 12, 0);
         }
         CreateEditor();
         AutomationProperties.SetAutomationId(_editor, row.Key);
         AutomationProperties.SetName(_editor, row.Label);
         AutomationProperties.SetHelpText(_editor, row.Description ?? row.Tooltip ?? "");
-        Editors.Children.Insert(0, _editor);
+        Editors.Children.Insert(_row is Toggle ? 1 : 0, _editor);
         Refresh();
     }
 
@@ -49,9 +50,16 @@ internal sealed partial class RowView : UserControl
         switch (_row)
         {
             case Toggle toggle:
-                var control = new ToggleSwitch();
+                var state = new TextBlock { Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
+                AutomationProperties.SetAccessibilityView(state, Microsoft.UI.Xaml.Automation.Peers.AccessibilityView.Raw);
+                Editors.Children.Add(state);
+                var control = new ToggleSwitch { MinWidth = 0, OnContent = "", OffContent = "" };
                 _editor = control;
-                _read = () => control.IsOn = toggle.Value.Current;
+                _read = () =>
+                {
+                    control.IsOn = toggle.Value.Current;
+                    state.Text = control.IsOn ? "On" : "Off";
+                };
                 control.Toggled += async (_, _) =>
                 {
                     if (!_updating)

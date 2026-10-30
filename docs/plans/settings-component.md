@@ -4,8 +4,9 @@ Status: phase 1 complete, 2026-10-30. Phases 2–4 remain pending. This componen
 trial precedes the main file-manager engine integration at the owner's request.
 It does not mark the main application foundation complete.
 
-The owner is continuing design. Keep the current sample as a prototype;
-further implementation is deferred until the design is agreed and requested.
+The owner is continuing design. Keep the current sample as a prototype.
+The requested presentation corrections copy TinyTorrent's working layout and
+motion; broader implementation remains deferred until requested.
 
 Read the [component contract](../../lib/Settings/docs/contract.md) before changing
 definitions, controls or dialogs. The [source audit](../research/tinytorrent-settings.md)
@@ -32,6 +33,19 @@ is checked against its isolated settings file. Save screenshots of new states.
 
 ## 2. Finish shared presentation enforcement
 
+Preserve TinyTorrent's working presentation by copying its controls/templates
+and motion before adapting app-specific bindings. Do not reconstruct the same
+behavior from screenshots. The
+[Community Toolkit options report](../research/community-toolkit-settings.md)
+records alternatives; no additional dependency or renderer is authorized by it.
+
+The current correction copies TinyTorrent's category overview and shared
+page/expander motion, restores row insets and centered header/navigation text,
+and keeps app content behind the existing declarations. This is a subset of
+phase 2, not completion of its full acceptance matrix. Code comparison checks
+the motion class, expander class and matching template against TinyTorrent's
+source; further video/screenshot capture was stopped at the owner's request.
+
 Consolidate the contract's metrics/styles/icons into their shared owner. Complete
 measured narrow-row layout, header alignment, single-line feedback/details,
 localization/resource validation, theme/High Contrast behavior and text scaling.
@@ -57,22 +71,58 @@ text, icon, button and feedback language without sharing arbitrary visual trees.
 leave/reenter Settings without losing accepted work or applying a draft. A test
 does not save settings; applying a proposal is one explicit owner request.
 
-## 4. Package and adopt deliberately
+## 4. Reuse and ship with the application
 
-Publish versioned Settings, TableView and Lucide artifacts with assets, licenses
-and compatible WinUI dependencies. Replace the local development source path
-with pinned packages for distribution. Evaluate TinyTorrent migration against
-this contract and its existing proxy, schedule and speed-test behavior; migrate
-one coherent category at a time, removing superseded presentation in that change.
-Do not start TinyTorrent migration or modify its sources in this trial.
+Keep Settings, TableView and Lucide as source project dependencies, each with one
+implementation owner. Include their compiled assemblies, resources, assets and
+licenses in each consuming application's normal release output, following the
+[application release contract](../ARCHITECTURE.md#dependency-and-release-contract).
+Record the source revisions used; separate library package publication is not a
+gate for reuse. Verify the consumer has no dependency on TinyTorrent application
+code. Evaluate TinyTorrent migration against this contract and its existing
+proxy, schedule and speed-test behavior; migrate one coherent category at a time,
+removing superseded presentation in that change. Do not start TinyTorrent
+migration or modify its sources in this trial.
 
-**Completion:** a clean consumer can restore the shared libraries without a
-TinyTorrent application checkout; equivalent settings have one presentation
-implementation in both products.
+**Completion:** a reproducible consumer build resolves the declared shared source
+dependencies, and the installed application carries all required resources and
+licenses. Equivalent settings have one presentation implementation in both
+products; the installed application needs no source checkout or component feed.
 
 ## Evidence
 
 Verified on 2026-10-30:
+
+- Pre-commit review: an independent reviewer completed the five code passes and
+  WinUI review. Its introduced reconfiguration finding was fixed by clearing the
+  current category before replacing the catalog; the delta review found no
+  outstanding material defects. One final default `Build.ps1` run passed with
+  zero warnings/errors and all five model checks. Default unpackaged launch and
+  `lib/Settings/tests/Advanced.ps1` passed against isolated settings. The earlier
+  packaged/unpackaged startup failure did not recur after rebuilding the current
+  configuration. Reconfiguration was traced in code; the model checks do not
+  exercise WinUI view lifetime. Remaining visual acceptance is still listed below.
+
+- Advanced-mode correction: the footer now updates disclosure without rebuilding
+  the category or replacing its icon. Search uses the same owner. Like
+  TinyTorrent's `ShowCategory`, selecting the already-current category does not
+  rebuild it. Three full `Build.ps1` runs passed with zero warnings/errors and
+  all five model checks; the third used an environment-only MSIX override for
+  verification because unrelated unpackaged launch edits were in progress.
+  `lib/Settings/tests/Advanced.ps1` passed using actual keyboard activation:
+  the diagnostic row appears/disappears, native editor/expander identities stay
+  unchanged and expansion survives both toggles. The earlier SelectionItemPattern
+  probe selected the footer without activating it; it is not evidence of the
+  actual Advanced toggle. No new model test attempts to simulate visual lifetime.
+
+- Presentation correction: two full `Build.ps1` runs passed the build and five
+  existing model checks. The first exposed a helper-name hiding warning;
+  using the copied shared `Motion.Clip` removed it. The final run had zero
+  warnings/errors and the final sample launched. Source comparisons passed for
+  the expander class, its template and the page motion class. Existing checks
+  cover settings semantics, not animation pixels. No new model test was added
+  for timing constants; the owner requested code comparison rather than more
+  captures. Narrow/text-scale/High Contrast acceptance remains pending below.
 
 - Reviewed the declarations, renderer, transaction flow, value lifetime, sample
   persistence and actual callers. TinyTorrent's referenced TableView/Lucide and
@@ -108,6 +158,6 @@ Local evidence is in ignored `artifacts/`: `settings-general.png`,
 
 Full contract compliance remains pending: narrow/long-text/scaled-text layouts,
 High Contrast and Narrator, complete keyboard/focus coverage, dialog action
-icons, workflow action/lifetime integration, localization and distributable
-packages. ARM64 and release packaging were not checked. No CI pipeline exists
+icons, workflow action/lifetime integration, localization and release integration.
+ARM64 and installer distribution were not checked. No CI pipeline exists
 for this new component yet; no hardware speed measurement was performed.

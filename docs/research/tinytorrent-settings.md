@@ -23,6 +23,7 @@ records the evidence and rationale; it is not another presentation authority.
 | `app/src/Settings/Fact.xaml`, `Overview.cs` | Fact icons and values from existing owners; no invented overview data or extra query |
 | `app/src/Controls/SettingsRow.cs`, `App.xaml` | Shared editor/name/error/unit handling and row/card templates |
 | `app/src/Controls/SettingsSection.cs`, `SettingsExpander.cs` | Header summary/description distinction and native expander mechanics with one animation owner |
+| `app/src/Controls/Motion.cs`, `SettingsPage.ShowCategory` | Directional 250-ms category entry, interrupted-motion cleanup, host clipping and system animation preference |
 | `app/src/Settings/Setting.cs` | Confirmed versus draft/pending state; newer-input protection; individual setting persistence callbacks |
 | `app/src/Settings/SettingsPage.xaml` and `.xaml.cs` | Current real compositions, special tasks, page-owned text commit handlers and inline overrides |
 | `lib/TableView/AGENTS.md`, `docs/tableview-contract.md` | Independently documented reusable library with sample/tests; host supplies data/commands/persistence |
@@ -31,6 +32,16 @@ The [WinUI Expander guidance](https://learn.microsoft.com/en-us/windows/apps/dev
 supports disclosing related secondary content. Native toggles are appropriate
 for [immediately effective binary choices](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/toggles).
 Those controls do not define the full application settings language.
+
+The prototype now copies `Motion.cs` and `SettingsExpander.cs` from this
+revision. Source comparison verifies that only namespaces and the expander type
+name/qualification differ. The expander template is copied with its native
+states and drawer parts, and the category renderer calls the copied `Enter`
+path using navigation order. The overview visual states, styles and measurement
+come from TinyTorrent's Header; its content bindings use our category/fact
+declarations. TinyTorrent's sources remain unchanged. This preserves the working
+presentation before generalizing its host boundary. See also the
+[Community Toolkit options](community-toolkit-settings.md).
 
 ## What the new abstraction must enforce
 
@@ -78,9 +89,12 @@ Those controls do not define the full application settings language.
 
 Develop `Syno.Settings` and a small non-torrent sample here. Refer to the existing
 TableView/Lucide source projects through an explicit development root. Fix table
-behavior in its original owner, not a copied implementation here. Before a second
-product adopts Settings, publish versioned libraries with assets/licenses and
-verify the consumer project has no dependency on TinyTorrent application code.
+behavior in its original owner, not a copied implementation here. A second
+product can use source project references and ship the compiled libraries,
+resources and licenses with its own installer. Verify the consumer project has
+no dependency on TinyTorrent application code. The owner subsequently chose
+TinyTorrent's installer release model; separate library package publication is
+not a prerequisite.
 
 This uses TableView's organizational pattern, not its arbitrary-cell-content
 contract: settings need stronger composition constraints to prevent the very

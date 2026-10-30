@@ -22,23 +22,25 @@ main-app/engine stages.
    the current goz working tree: command table, menu/control gestures,
    settings, viewers, transfers, resources and relevant design sections.
    Record source revision and working-tree changes without modifying them.
-2. Confirm the source owner and artifact release route in goz. Identify the
-   reusable code still embedded in gozler-ui and the minimum extraction
+2. Confirm the source owner and reproducible library build route in goz. Identify
+   the reusable code still embedded in gozler-ui and the minimum extraction
    needed for the first file-operation slice.
 3. **Completed 2026-10-30:** removed the superseded Rust application extraction,
    build tooling, CI, installer and inherited documents. Retained the active
    plans, license and repository configuration, with ignore rules for the new
    C# application. The original checkout remains the reference; no archive
    branch or second engine was created.
-4. Select supported platform/runtime versions and initial packaging from the
-   installed toolchain and official requirements. Establish one WinUI build/run
-   entry point and dependency restoration for the versioned native artifact.
+4. Select supported platform/runtime versions and installer prerequisites for
+   the agreed release model in ARCHITECTURE.md. Establish one WinUI build/run
+   entry point and a reproducible build of the shared native library. Account
+   for unpackaged startup, runtime initialization and Windows integration.
 5. Bootstrap the minimal WinUI application with light/dark resources and keyboard
    focus. Keep configuration and entry points only as large as this requires.
 
 **Proof:** the baseline checklist accounts for the working source surfaces;
 the new app builds and opens a responsive window; the active build does not
-compile an extracted gozler-ui or require a hard-coded sibling checkout.
+compile an extracted gozler-ui. Shared source locations are explicit build
+inputs, with developer-specific absolute paths outside version control.
 Document actual prerequisites without installing new tools implicitly.
 
 ## Stage 1: share the existing engine through a native library
@@ -59,8 +61,10 @@ must be reviewable independently.
 4. Exercise temporary-file copy and delete through that client, including
    progress, a refusal/failure and cancellation. Confirm engine recovery state
    is restored before accepting new work.
-5. Package a reproducible, versioned native artifact and pin it here. Establish
-   ABI compatibility checks and an intentional dependency-update procedure.
+5. Build a reproducible DLL from the selected shared source revision and stage
+   it with the matching C# application output. Establish ABI compatibility
+   checks and an intentional source-update procedure; no separate package feed
+   or library release is required.
 
 **Proof:** the WinUI process loads the DLL and executes the real shared engine;
 no engine host/service is installed or spawned. Native boundary tests detect
@@ -203,8 +207,9 @@ Save screenshots for changed states. Maintain an After install list for hardware
 network-share, shell integration and owner-specific checks; these do not stop
 independently verifiable implementation. Hardware claims require measurements.
 
-Before release, verify all scope IDs, package contents/version compatibility,
-fresh install/upgrade behavior, light/dark/high contrast, keyboard/accessibility,
+Before release, verify all scope IDs, installer contents/version compatibility,
+prerequisite acquisition, fresh install/upgrade/uninstall behavior, state
+preservation, light/dark/high contrast, keyboard/accessibility,
 DPI, realistic collection sizes and operation interruption/recovery. No extra
 engine executable/service may appear in the shipped package or runtime topology.
 User-launched terminals/editors and the pre-existing index service are distinct.
@@ -216,19 +221,19 @@ assumed inherited policy:
 
 | Decision | Resolve by |
 | --- | --- |
-| Supported OS/runtime versions, packaging and canonical artifact publication | Stage 0 |
+| Supported OS/runtime versions and installer prerequisites | Stage 0 |
 | Concrete ABI payload/delivery, session ownership and shutdown protocol | Stage 1 |
 | Command-line grammar, quoting and shortcut conflicts; width persistence/auto-fit | Stage 2 |
 | Recycle Bin mode/default as an addition to permanent fast delete; extra-process recovery ownership | Stage 3, before the affected behavior |
 | Search-result open default and index-administration permissions/target | Stage 4 |
-| Tray default, viewer lifetime, activation and update distribution | Stage 5 |
+| Tray default, viewer lifetime, activation and update behavior | Stage 5 |
 | ZIP implementation/dependency and common distribution | Stage 6 |
 | Checksum formats and preview implementation scope | Stage 7 |
 
 ## First implementation task
 
 After the current Settings component trial, resume stage 0 and the stage 1
-vertical slice: one pinned Rust DLL, one real C#
-consumer, copy/delete/progress/cancel/recovery. Prove shared ownership and native
+vertical slice: one shared Rust DLL built from a selected source revision, one
+real C# consumer, copy/delete/progress/cancel/recovery. Prove shared ownership and native
 lifetime before expanding the UI. This is the first development slice, not a
 redefinition of the agreed complete product.
