@@ -31,6 +31,9 @@ replace or reconfigure the installed goz service as part of development.
 - Keep file-operation algorithms, policies, scheduling and recovery in their
   shared Rust owner. C# requests work and presents outcomes. The architecture
   assigns the other reusable engine responsibilities.
+- Owners publish accepted state; consumers observe it and own their activity.
+  Read [publication and activity](docs/ARCHITECTURE.md#publication-and-activity)
+  before one owner's change causes another feature's work.
 - Menus, keys, buttons and context menus invoke the same command implementation.
   Store facts once and derive presentation. Keep related decisions together;
   the main window composes their owners.
@@ -47,6 +50,8 @@ replace or reconfigure the installed goz service as part of development.
 - Keep disk, network, service, shell and expensive collection work off the UI
   thread. Each owner defines cancellation, stale-result rejection and shutdown.
   The Rust engine retains its scheduler; C# does not create a competing one.
+  Read the [window rules](docs/ARCHITECTURE.md#window-rules) before writing
+  window, view-model or background-work code.
 - Review resource lifetime explicitly, especially native handles, event
   subscriptions, buffers and worker completion. Closing a view invalidates its
   pending deliveries without losing accepted operations.

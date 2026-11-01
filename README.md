@@ -19,7 +19,8 @@ See the [sample setup](lib/Settings/README.md#visual-studio) for shared dependen
 
 - [Product and feature inventory](PRODUCT.md): existing capabilities, additions
   and the scope of parity.
-- [Architecture](docs/ARCHITECTURE.md): ownership, shared code, native interop
+- [Architecture](docs/ARCHITECTURE.md): ownership, shared code, native interop,
+  the [WinUI application structure](docs/ARCHITECTURE.md#winui-application-structure)
   and application lifetime.
 - [Implementation plan](docs/plans/synapsecommander.md): ordered stages,
   dependencies and completion criteria.

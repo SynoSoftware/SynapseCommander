@@ -23,8 +23,19 @@ A disabled placeholder is not a working feature: F4 Edit is an addition.
 
 ## Vocabulary
 
+- The window shows one of two **modes**. **Commander mode** shows the two
+  panels; **Search mode** shows indexed search across the index. Each mode
+  keeps its state while the other shows.
 - A **panel** shows a folder or scoped indexed search. A **tab** retains one
-  panel view, including navigation and selection.
+  panel view, including navigation and selection. The **active panel** is the
+  one that commands act on; the other panel's folder is the default
+  destination.
+- **Focus** is the one entry under the cursor. **Marks** are the selected
+  entries that a command acts on. When nothing is marked, a command acts on
+  the focused entry.
+- The **key bar** is the row of function-key buttons below the command line.
+- The **lower pane** is the region below the workspace. It shows **File
+  transfers** or the **inspector**.
 - **Search** asks the index for matching descendants or global results.
   **Quick search** focuses a matching visible name; **quick filter** narrows
   the current folder listing.
@@ -121,7 +132,7 @@ criteria refine implementation scope without reducing the baseline.
 | A13 | Compare two files | Launch a configured external comparison tool with captured, correctly quoted paths |
 | A14 | Check file contents | Create/verify checksum files with cancellable reads, mismatch reporting and readable partial failures |
 | A15 | List descendants together | Indexed branch view with coverage/completeness visible |
-| A16 | Keep a useful layout | Adjustable panel splitter and remembered user column widths, with an explicit auto-fit option |
+| A16 | Keep a useful layout | Adjustable panel splitter with a remembered position. Columns fit and fill as TableView does; a manual column resize is not saved (owner decision, 2026-11-01) |
 | A17 | Find within a viewed file | Cancellable text/hex find, next/previous and position reporting without loading the whole file |
 | A18 | Preview common documents | Image preview and a PDF opening/preview workflow; external viewing first where it serves the task |
 
