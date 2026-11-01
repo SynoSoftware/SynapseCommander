@@ -1,12 +1,15 @@
 # SynapseCommander
 
-Build an independent C#/WinUI 3 presentation over the shared Rust engine.
+Build an all-C# WinUI 3 file manager: the presentation and its engine
+libraries live in this repository, with no Rust. Use C or C++ only where C#
+cannot do a job, such as an existing native library.
 The simplest correct code should make intent and ownership obvious on first
 reading. One responsibility has one authority and one implementation.
 
 ## Read before changing behavior
 
-- Read [PRODUCT.md](PRODUCT.md) for scope and vocabulary.
+- Read [PRODUCT.md](PRODUCT.md) for scope and [CONTEXT.md](CONTEXT.md) for
+  vocabulary. Decisions that are hard to reverse are in [docs/adr](docs/adr).
 - Read [architecture](docs/ARCHITECTURE.md) before changing ownership, native
   interop, background work, persistence, search, operation lifetime, shared
   dependency sourcing or release distribution.
@@ -16,21 +19,20 @@ reading. One responsibility has one authority and one implementation.
   [Settings component contract](lib/Settings/docs/contract.md). Its
   [plan](docs/plans/settings-component.md) owns the current component trial.
 
-These are the active project documents. Refer to the separate goz checkout for
-the original implementation. Its Win32 control rules, Rust build workflow,
-daemon policies and product defaults do not automatically apply to the new
-WinUI application.
-
-The shared engine's source is in the separate goz repository, currently at
-`C:\SynoSoftware\TinyTorrent2\3rdParty\goz`. Read that repository's own
-instructions before changing it. Preserve other sessions' work. Never stop,
-replace or reconfigure the installed goz service as part of development.
+These are the active project documents. The separate goz checkout, currently
+at `C:\SynoSoftware\TinyTorrent2\3rdParty\goz`, holds gozler-ui. Its
+`docs/DESIGN.md`, `docs/research` and `docs/BENCHMARKS.md` are the engine's
+specification, and its Rust code is a reference for edge cases. Its Win32
+control rules, Rust build workflow, daemon policies and product defaults do
+not apply to this application. Never stop, replace or reconfigure the
+installed goz service as part of development.
 
 ## Code and ownership
 
-- Keep file-operation algorithms, policies, scheduling and recovery in their
-  shared Rust owner. C# requests work and presents outcomes. The architecture
-  assigns the other reusable engine responsibilities.
+- Keep file-operation algorithms, policies, scheduling and recovery in
+  `Syno.Files`, and the search client in `Syno.Index`. The presentation
+  requests work and presents outcomes. The architecture assigns the other
+  engine responsibilities.
 - Owners publish accepted state; consumers observe it and own their activity.
   Read [publication and activity](docs/ARCHITECTURE.md#publication-and-activity)
   before one owner's change causes another feature's work.
@@ -49,15 +51,17 @@ replace or reconfigure the installed goz service as part of development.
   code-behind and forwarding-only view models.
 - Keep disk, network, service, shell and expensive collection work off the UI
   thread. Each owner defines cancellation, stale-result rejection and shutdown.
-  The Rust engine retains its scheduler; C# does not create a competing one.
+  `Syno.Files` owns the one operation scheduler; nothing else creates a
+  competing one.
   Read the [window rules](docs/ARCHITECTURE.md#window-rules) before writing
   window, view-model or background-work code.
 - Review resource lifetime explicitly, especially native handles, event
   subscriptions, buffers and worker completion. Closing a view invalidates its
   pending deliveries without losing accepted operations.
 - Validate untrusted disk, archive and native inputs with checked lengths and
-  bounded allocations. Keep unsafe interop small and within its designated
-  owner. Preserve the shared engine's integrity rules.
+  bounded allocations. Keep P/Invoke and `unsafe` code small and inside the
+  engine library that owns it. Preserve the integrity rules of goz
+  `docs/DESIGN.md` that the engine implements.
 - Make the smallest coherent change that solves the whole task. Remove the
   superseded path and orphans created by the change. Preserve unrelated work.
   Edit existing files through the file-edit tool and preserve their encoding
@@ -65,7 +69,7 @@ replace or reconfigure the installed goz service as part of development.
 
 ## Naming and structure
 
-Use C#/.NET conventions for C# and Rust conventions in the engine. Follow
+Use C#/.NET conventions. Follow
 canonical domain and platform vocabulary, with clarity at the use site first.
 
 - Do not repeat context the owner already supplies: `Panel.Path`,
@@ -79,9 +83,9 @@ canonical domain and platform vocabulary, with clarity at the use site first.
 - Challenge filler such as Data, Info, Helper, Manager, Service and Model.
   Retain a word when it represents a real distinction. Do not abbreviate for
   brevity or impose a word-count quota.
-- Keep ABI declarations faithful to the exported contract. Use clear C# names
-  in the managed interface. Resource keys need enough context to remain unique
-  in their shared dictionary.
+- Keep P/Invoke declarations faithful to the Windows or native library
+  signature. Use clear C# names in the managed API. Resource keys need enough
+  context to remain unique in their shared dictionary.
 - Organize code around responsibility, lifetime and ownership. Keep related
   declarations together; avoid generic dumping grounds and layers that merely
   rename another owner's methods.
@@ -95,8 +99,9 @@ specific file-size, enum-placement and naming approval rules are not adopted.
 
 Name the user-visible failure or lasting invariant before adding a test.
 Test it at its owner; do not duplicate engine tests in the presentation.
-Native interop tests must exercise the real DLL, and ordinary automated tests
-must not depend on a running indexing service or the user's files.
+Engine checks run on real temporary folders and a fake gozlerd pipe; ordinary
+automated tests must not depend on a running indexing service or the user's
+files.
 
 Review each coherent stage, then run its applicable checks. Use state-based
 completion rather than fixed sleeps. Run focused checks earlier only when the

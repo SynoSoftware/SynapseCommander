@@ -4,9 +4,10 @@ SynapseCommander is a new C#/WinUI 3 file manager for Windows, developed by
 SynoSoftware. Its baseline is the complete working feature set of gozler-ui,
 with the everyday improvements in the product plan.
 
-File operations use the shared Rust engine, loaded as an application-local DLL.
-There is no additional engine executable or service. The existing indexing
-service remains responsible for indexing and search.
+SynapseCommander is all C#: its file engine, listings, viewers, archives and
+search client are libraries in this repository, with no Rust. There is no
+additional engine executable or service. The existing indexing service remains
+responsible for indexing and search.
 
 ## Visual Studio
 
@@ -19,9 +20,11 @@ See the [sample setup](lib/Settings/README.md#visual-studio) for shared dependen
 
 - [Product and feature inventory](PRODUCT.md): existing capabilities, additions
   and the scope of parity.
-- [Architecture](docs/ARCHITECTURE.md): ownership, shared code, native interop,
-  the [WinUI application structure](docs/ARCHITECTURE.md#winui-application-structure)
+- [Architecture](docs/ARCHITECTURE.md): ownership, the engine libraries, the
+  [WinUI application structure](docs/ARCHITECTURE.md#winui-application-structure)
   and application lifetime.
+- [Glossary](CONTEXT.md) and [decision records](docs/adr): the product's words
+  and the decisions that are hard to reverse.
 - [Implementation plan](docs/plans/synapsecommander.md): ordered stages,
   dependencies and completion criteria.
 - [Contributor guidance](AGENTS.md): coding, naming and verification.
@@ -31,11 +34,11 @@ See the [sample setup](lib/Settings/README.md#visual-studio) for shared dependen
 These documents describe planned work, not an implemented WinUI application.
 The superseded Rust extraction and inherited tooling and documents have been
 removed. The reusable Settings component and sample are being developed here;
-the complete WinUI file manager and Rust-library integration remain pending.
+the complete WinUI file manager and its engine libraries remain pending.
 
-The shared engine's source currently lives in the separate goz working folder,
-`C:\SynoSoftware\TinyTorrent2\3rdParty\goz`. SynapseCommander will build and ship
-the shared DLL without copying its implementation or importing goz history.
+gozler-ui's design, research and measurements in the separate goz working
+folder, `C:\SynoSoftware\TinyTorrent2\3rdParty\goz`, are the specification for
+the engine. SynapseCommander does not copy goz's code or import its history.
 Existing license notices remain with any reused code.
 
 Distribution will follow TinyTorrent2: a per-user Inno Setup `.exe` installer

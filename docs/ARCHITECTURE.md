@@ -1,98 +1,124 @@
-# Architecture: shared Rust engine, WinUI presentation
+# Architecture: C# engine, WinUI presentation
 
-Status: agreed direction, 2026-10-30. The interface and packaging are planned;
-no native DLL or C# client has been implemented by this document.
+Status: agreed direction, 2026-10-30; changed to an all-C# product on
+2026-11-01. No engine or application code exists yet.
 [Product scope](../PRODUCT.md) and the
 [implementation plan](plans/synapsecommander.md) are separate authorities.
 
 ## Process and source ownership
 
-SynapseCommander is one C#/WinUI 3 application process. It loads an
-application-local Rust DLL. There is no additional engine executable,
-background host, Windows service or new file-operation pipe.
+SynapseCommander is one C#/WinUI 3 application process. Its file engine,
+folder listings, viewer reads, archives and search client are C# libraries in
+this repository ([ADR 0001](adr/0001-no-rust.md)). This repository has no Rust.
+C or C++ is used only where C# cannot do a job, such as an existing native
+library. There is no additional engine executable, background host, Windows
+service or new file-operation pipe.
 
-gozler-ui continues to use the same Rust implementation as crates in its own
-process. Both applications run operations with their own user token. They have
-separate queues and do not claim to coordinate disk scheduling across processes.
+gozler-ui keeps its own Rust engine in the goz repository. The two products
+share no engine code, so a fix in one is not a fix in the other. Both run
+operations with their own user token, have separate queues and do not
+coordinate disk scheduling.
 
-The existing indexing service retains indexing/search responsibility and its
-existing trust contract. It gains no copy, move or delete commands.
+The existing indexing service, gozlerd, keeps indexing, search and its trust
+contract. It gains no copy, move or delete commands. SynapseCommander talks to
+it through its existing pipe protocol, with a C# client.
 
 ```text
-goz repository: one engine source, one engine test suite
-    shared Rust modules
-        +--> gozler-ui: direct Rust calls
-        +--> native DLL exports --> SynapseCommander: C# / WinUI 3
-
-both engine instances --> filesystem, using their application's token
-shared Rust index client --> existing compatible indexing service
+SynapseCommander process, all C#
+    WinUI application --> Presentation --> Syno.Files: operations, queue, recovery,
+                                           listings, watching, viewer reads, archives
+                                       --> Syno.Index: query parsing, pipe protocol
+Syno.Files --> filesystem, with the person's token
+Syno.Index --> the installed gozlerd service, unchanged
 ```
 
-Initially keep the shared implementation and native exports in the goz
-repository, currently `C:\SynoSoftware\TinyTorrent2\3rdParty\goz`.
-Build the DLL from that source owner and include the matching output in the
-application's release. Record the source revision used; publishing a separate
-library package is not a prerequisite. SynapseCommander does not vendor crates,
-copy algorithms or import goz history. Build configuration locates the source
-checkout without committing a developer's absolute path. Engine fixes are made
-once and each product deliberately adopts the selected revision.
+**The goz repository is the specification, not a dependency.** goz
+`docs/DESIGN.md` ("The copy, move and delete engine", "File operations",
+"Device admission", "Synchronize folders"), its research
+(`docs/research/fast-copy-delete.md`, `ssd-copy-scheduling.md`) and its
+measurements (`docs/BENCHMARKS.md`) give the behavior, the integrity rules and
+the methods. The Rust code, currently at
+`C:\SynoSoftware\TinyTorrent2\3rdParty\goz`, is a reference for edge cases.
+SynapseCommander does not translate it line by line, copy its tests or import
+its history. It writes its own tests from the specification. Where this
+product's rules differ, such as the Delete lane or the Mirror question, this
+document wins.
 
 ## Responsibility map
 
 | Owner | Responsibilities |
 | --- | --- |
-| Shared Rust file operations | Preparation, validation, conflicts, destination rules, copy/move/delete/rename/new folder, synchronization, scheduling, progress, reports, recovery and speed settings |
-| Shared Rust index client/query code | Existing query syntax, request construction, protocol/trust checks, snapshots, matching metadata, search/export semantics and service diagnostics |
-| Shared Rust folder/viewer work | Reusable folder enumeration/watch logic, file identity and size work; viewer reads, decoding and byte navigation |
-| Native exports | ABI validation, ownership of handles/buffers, request/result translation and delivery; no second engine |
-| C# engine client | Managed lifetimes, asynchronous calls, native-to-managed translation and delivery to presentation owners |
+| `Syno.Files`: file operations | Preparation, validation, conflicts, destination rules, copy/move/delete/rename/new folder, Sync and Mirror, scheduling in two lanes, progress, reports, recovery and speed values |
+| `Syno.Files`: listings and viewers | Folder and archive enumeration, watching, file identity and folder sizes; viewer reads, decoding and byte navigation |
+| `Syno.Files`: archives | The archive interface and its format modules |
+| `Syno.Index` | gozler's query syntax, request construction, the pipe protocol and its trust checks, result snapshots, matching metadata, export semantics and service diagnostics |
 | C# presentation | Windows, panels/tabs, navigation history, focus/selection, command routing, dialogs, localized text, view state and accessibility |
 | C# Windows integration | Clipboard and drag/drop, shell launch, app activation, notification area and global shortcuts |
-| C# persistence | SynapseCommander settings and window/tab state; engine recovery records remain Rust-owned |
+| C# persistence | SynapseCommander settings and window/tab state; recovery records belong to `Syno.Files` |
 
-Some reusable code still lives inside `gozler-ui::core` or its platform modules.
-Move that implementation to an appropriate shared Rust owner when exposing it;
-update gozler-ui to use the new owner and remove the superseded path in the
-same change. Do not port query parsing, viewer decoding or filesystem engines
-to C# to get an early screen working. Purely visual state and WinUI mechanics
-belong in the new UI and need not reproduce Rust UI models.
+The engine libraries have no WinUI and no presentation code. All P/Invoke and
+`unsafe` code is inside them, each declaration beside the owner that uses it.
+Batch-rename masks and checksum algorithms also belong to `Syno.Files` as their
+features land; a preview and its rename call the same function. External
+tools retain their own implementation. The UI gathers intent and presents
+outcomes.
 
-Future archive, batch-rename and checksum algorithms belong to a shared Rust
-owner as their features land. External tools retain their own implementation.
-The UI gathers intent and presents outcomes.
+**The query parser is a port with checks.** gozlerd's pipe carries a parsed
+query (goz `crates/gozler-core/src/proto/types.rs`), so the client parses.
+`Syno.Index` ports the parser and the binary protocol to C#. Its checks are
+built from goz's query tests and the query help's examples, so drift between
+the two parsers fails a check. Changing gozlerd to parse query text would keep
+one parser, but it needs Rust work, which the owner ruled out (lead decision,
+2026-11-01).
 
-## Native interface
+**Archives are format modules behind one archive interface** (owner ruling,
+2026-11-01; [ADR 0004](adr/0004-archive-format-modules.md)). The interface is
+a C# interface in `Syno.Files`. A module lists, reads and, where its format
+allows, creates archives:
 
-Expose a small C ABI over the existing Rust owners; Rust type layout is not the
-public contract. Start with file operations, prove a real C# consumer, then
-extend the same contract for search, listings and viewers.
+- ZIP, TAR and TGZ use .NET's `ZipArchive`, `TarReader`, `TarWriter` and
+  `GZipStream`.
+- 7z and RAR reading uses SharpCompress (MIT license). RAR is read only in
+  every library.
+- 7z creation uses SharpCompress if its current release writes 7z, which its
+  repository notes suggest but which is not verified; otherwise 7-Zip's
+  `7z.dll` (C++, LGPL, loaded as a separate DLL) as one native module. Stage
+  6 checks and records the choice.
 
-The first contract defines these requirements before implementation:
+The engine lists an archive the same way it lists a folder, so a panel shows
+an archive folder with the same kind of result set. An encrypted archive's
+password is asked for when it opens, is held in memory only while it is open
+and is never saved. Design the interface with the `codebase-design` skill
+before the first module.
 
-- Explicit ABI version/capabilities and structured status codes. Check
-  compatibility before opening a session or accepting mutations.
-- Opaque handles for sessions, operations, result snapshots and viewers as
-  needed. Managed SafeHandle ownership never exposes Rust references or
-  allocator assumptions.
-- Explicit fixed-width scalar/enum representations, calling convention,
-  structure sizes, pointer/length pairs and allocator-matched release functions.
-  Use length-delimited UTF-16 for Windows paths so unpaired surrogates remain
-  representable; keep path, display text and shell command text distinct.
-- Native functions validate lengths and ranges and return typed failures.
-  Rust panics must never unwind across the ABI; define the containment/fatal
-  policy rather than presenting a corrupted engine as a successful call.
-- One bounded asynchronous delivery mechanism with batched state and progress.
-  Terminal states and failures remain observable even when intermediate
-  progress is coalesced. A callback never enters WinUI or calls back into a
-  locked engine.
-- Snapshot/page access for large results and reports, rather than one native
-  call per displayed cell or a full managed copy of millions of rows.
-- Explicit cancellation, stale-request identities, result release and shutdown.
-  A cancelled observation does not imply an accepted filesystem mutation was
-  rolled back.
+## Engine libraries
+
+`Syno.Files` and `Syno.Index` are in-process libraries with ordinary C# APIs.
+Their API follows these rules:
+
+- **Delivery.** The engine runs its own threads and publishes snapshots of its
+  state. It never calls into WinUI or into a presentation lock. After each
+  change it signals once; `Shared.Engine` takes the latest snapshot and the
+  replies off the UI thread and posts one apply. Terminal states and failures
+  stay observable even when intermediate progress is coalesced.
+- **The index is a dependency of the engine.** `Syno.Files` receives the index
+  it uses for totals, the gozlerd client or none, when it is created. Tests
+  create it with none, so they never depend on the user's service.
+- **Requests have identities and can be cancelled.** A result has an explicit
+  release. A cancelled observation does not imply that an accepted filesystem
+  change was rolled back.
+- **Close is ordered.** Engine close refuses new work, stops its operations,
+  writes the recovery record and ends its threads, all off the UI thread; the
+  caller waits for the returned task off the UI thread.
+- **Native calls** follow .NET's
+  [native interop guidance](https://learn.microsoft.com/en-us/dotnet/standard/native-interop/best-practices):
+  `LibraryImport` where suitable, `SafeHandle` for every native handle, and
+  checked lengths. A Windows path stays a .NET string, which can hold the
+  unpaired surrogates that NTFS allows; path, display text and shell command
+  text stay distinct types.
 
 gozler-ui and TinyTorrent2 restructured their engine boundaries several times.
-The contract keeps what those changes established:
+These rules keep what those changes established:
 
 - **A range-read list reads an engine-held result set.** The engine keeps an
   immutable result for each search or listing, and the UI reads pages of it
@@ -101,14 +127,16 @@ The contract keeps what those changes established:
   Without a held result, rows of different pages came from different moments
   and the list stopped at 100,000 rows (goz `result-snapshot.md`, `b2bca38`,
   `4f670e2`).
-- **Paths keep the engine's meaning.** C# does not normalize, resolve, or
-  rewrite paths, and it does not touch the disk to make a search work. Where
+- **Paths keep the engine's meaning.** The presentation does not normalize,
+  resolve, or rewrite paths, and it does not touch the disk to make a search
+  work. Where
   the UI needs a derived value, such as match highlights, it calls the same
   engine function. A client-side path rewrite was deleted for that reason
   (goz `paths-through-links.md`, `9c1d086`).
 - **The engine returns whole answers and exposes its limits as data.** A page
   carries its rows, the total and its completeness. Limits such as counts and
-  ranges come from the engine, not from constants in C# (goz `d52b4ff`).
+  ranges come from the engine, not from constants in the presentation (goz
+  `d52b4ff`).
   Sequences that take locks stay inside one engine call (`4f670e2`).
 - **Last-known state is shown at once and marked as not yet confirmed.** An
   unavailable location is "unavailable", not an empty listing. Work that
@@ -121,16 +149,7 @@ The contract keeps what those changes established:
   pipe first waited for each reply before the next request
   (`communication-plan.md`, `536c662`).
 
-Finalize the concrete exports, payload representation and delivery mechanism in
-stage 1 using the first operation slice. Avoid a generic RPC framework or
-serializing every internal Rust structure as the public contract.
-Transport/layout compatibility tests supplement the shared engine tests.
-
-Use .NET [native interop guidance](https://learn.microsoft.com/en-us/dotnet/standard/native-interop/best-practices),
-including LibraryImport where suitable and SafeHandle for native resources.
-[P/Invoke](https://learn.microsoft.com/en-us/dotnet/standard/native-interop/pinvoke)
-is the supported managed/native call mechanism. The responsibilities above are
-project design decisions, not claims that .NET provides an engine abstraction.
+Stage 1 settles the concrete engine API with the first operation slice.
 
 ## WinUI application structure
 
@@ -154,14 +173,17 @@ revisions are TinyTorrent2 `446b3f2` and goz `e1b5b8b`.
 | Project | Location | Role | Depends on |
 | --- | --- | --- | --- |
 | SynapseCommander | `app/src/SynapseCommander.csproj` | The WinUI application: `App`, windows, XAML views, the Settings catalogue and Windows integration (`Shared.Desktop`) | Presentation, Settings, Controls, TableView, Glyphs, WinUI, .NET |
-| Presentation | `app/presentation/Presentation.csproj` | The presentation owners: view models, commands, panels, search results, operations state, the inspector's state, `Shared.Engine`, `Shared.Work` and `Shared.Storage` | .NET only, no WinUI; loads the engine DLL |
+| Presentation | `app/presentation/Presentation.csproj` | The presentation owners: view models, commands, panels, search results, operations state, the inspector's state, `Shared.Engine`, `Shared.Work` and `Shared.Storage` | Files, Index, .NET; no WinUI |
 | PresentationChecks | `app/tests/PresentationChecks.csproj` | Console checks of the presentation owners, without a window | Presentation |
 | Settings | `lib/Settings/src` | `Syno.Settings`, the settings presentation library | WinUI, Glyphs (Lucide until stage 0 moves it) |
 | SettingsSample, SettingsChecks | `lib/Settings/sample`, `lib/Settings/tests` | Settings development host and model checks | Settings |
 | Controls | `lib/Controls/src` | `Syno.Controls`: generic window controls with no product rules. It starts with `Pane`, `Splitter` and `MenuItems`, copied from TinyTorrent2's application | WinUI, Glyphs |
 | TableView | TinyTorrent2 `lib/TableView/src` | The only table control | WinUI, Glyphs |
 | Glyphs | TinyTorrent2 `lib/Glyphs/src` | Names for the glyphs of Windows' icon font | WinUI |
-| Engine DLL | goz repository | The shared Rust engine behind the [native interface](#native-interface) | Rust crates |
+| Files | `lib/Files/src` | `Syno.Files`: file operations, the queue, recovery, listings, watching, viewer reads and archives ([engine libraries](#engine-libraries)) | .NET, SharpCompress; Windows through P/Invoke |
+| FilesChecks | `lib/Files/tests` | Checks of `Syno.Files` on real temporary folders, written from goz `docs/DESIGN.md`, and the speed measurements against goz `docs/BENCHMARKS.md` | Files |
+| Index | `lib/Index/src` | `Syno.Index`: the gozlerd client, its query parser and pipe protocol | .NET |
+| IndexChecks | `lib/Index/tests` | Parser and protocol checks built from goz's query tests, with a fake pipe server; no running service | Index |
 
 Settings presentation belongs to `Syno.Settings`, whose
 [contract](../lib/Settings/docs/contract.md) owns declarations, layout and commit
@@ -180,6 +202,14 @@ icon per command stays the same in both products.
 
 `SynapseCommander.sln` gains the product project. `Build.ps1` stays the one
 build entry point and gains the product build and launch.
+
+The application pins one Windows App SDK release for itself and its
+installer. Each library references the lowest release it needs, and the
+application's release is at least as high as every library's. Prefer
+TinyTorrent2's release, 2.5.1, so both products share one installed Windows
+App Runtime. Settings references 2.6.4 since `4fd3bfc`, with no recorded
+reason; stage 0 lowers it and a build against 2.5.1 shows whether any newer
+API is needed.
 
 ### Application areas
 
@@ -208,67 +238,82 @@ bounded check in the running application, not a permanent suite.
 
 | Area | Owns |
 | --- | --- |
-| `Shell/` | `MainWindow`, `MainViewModel`, the command table, the shared inspector, the lower pane, message bar and notifications, About and update checks. It composes the features and coordinates their lifetime. |
-| `Panels/` | Commander mode: both panels, tabs, folder listings as presented, focus and marks, history and favorites, quick search and quick filter, drives, the command line, the key bar and panel drag/drop. |
-| `Search/` | `Search.Results`, the one owner of a search's query, match modes, filters, result pages, highlights and selection snapshot, and the Search mode view that hosts it (stage 4). |
-| `Operations/` | The presented queue, the File transfers view, reports, recovery prompts and the drafts of Copy, Move, Delete, New folder and Synchronize. |
+| `Shell/` | `MainWindow`, `MainViewModel`, page navigation and its history, the command table, the shared inspector, the status bar, message bar and notifications, About and update checks. It composes the features and coordinates their lifetime. |
+| `Panels/` | The Commander page: both panels, tabs, folder and archive listings as presented, focus and marks, history and favorites, quick search and quick filter, Quick View's place, drives, the command line, the key bar and panel drag/drop. |
+| `Search/` | `Search.Results`, the one owner of a search's query, match modes, filters, result pages, highlights and selection snapshot, and the Search page that hosts it (stage 4). |
+| `Operations/` | The presented queue, the File operations page, the status bar items of operations, reports, recovery prompts, the Mirror question, the Multi-Rename page and the drafts of Copy, Move, Delete, New folder, Sync, Mirror and Multi-Rename. |
 | `Viewers/` | Text and Hex viewer windows (stage 5). |
 | `Settings/` | The typed preferences and configured shortcuts, in Presentation, and the `Syno.Settings` catalogue declarations that bind them, in the WinUI application. |
-| `Shared/` | Common dialogs, text formatting and `Work`, the owner of UI background work. `Engine/` holds the native declarations, safe handles, session and delivery. `Desktop/` holds clipboard, drag/drop, shell launch, the notification area, activation, global shortcuts and taskbar progress. `Storage/` holds settings and view-state files. |
+| `Shared/` | Common dialogs, text formatting and `Work`, the owner of UI background work. `Engine/` holds the engine instance and its delivery. `Desktop/` holds clipboard, drag/drop, shell launch, the notification area, activation, global shortcuts and taskbar progress. `Storage/` holds settings and view-state files. |
 
 A type that serves several areas lives in `Shared/`. Feature areas have one
 exception, and it points one way: a panel tab whose location is a search holds
-a `Search.Results`, the same owner that Search mode uses. `Search/` never uses
-`Panels/`. gozler-ui also has one search list type, `SearchList`, for Search
-mode and for a panel search. Two result owners would be two implementations of
+a `Search.Results`, the same owner that the Search page uses. `Search/` never
+uses `Panels/`. gozler-ui also has one search list type, `SearchList`, for
+Search mode and for a panel search. Two result owners would be two implementations of
 paging, highlights and the selection snapshot. Type names below are the
 planned owners. Implementation may refine them under the
 [naming rules](../AGENTS.md#naming-and-structure).
 
 ### Main window
 
-One window shows one of two modes, as in gozler-ui. Commander mode shows the
-two panels. Search mode shows indexed search across the index. Each mode keeps
-its own state while the other mode shows. View > Commander (`Alt+F12`) and
-View > Search (`Alt+F7`) switch modes. The window opens in the mode that it
-closed in.
+**Owner rulings, 2026-11-01:** one main window shows one page at a time
+([ADR 0002](adr/0002-one-window-of-pages.md)). The Commander page is home.
+The Search page (`Alt+F7`), the Multi-Rename page (`Ctrl+M`), the File
+operations page and Settings are secondary pages. Only viewers (F3) are other
+windows of ours; F4 starts the external editor. The window always opens on
+the Commander page.
 
 ```text
 +----------------------------------------------------------------------+
-| Title bar: icon, title, menu bar (File Edit View Help ... Language)  |
+| Title bar: [Back] icon, title, menu bar (File Edit View ... Help)    |
 +----------------------------------+-----------------------------------+
-| Left panel                       | Right panel                       |
+| Left panel                       | Right panel, or Quick View        |
 |  [tabs, stage 6]                 |                                   |
 |  drive button | path box         |                                   |
 |  TableView: Name Ext Size Date   |          (splitter, A16)          |
 |  summary: marks, sizes, free     |                                   |
 +----------------------------------+-----------------------------------+
-| Lower pane (splitter): File transfers or inspector                   |
-+----------------------------------------------------------------------+
 | Command line: C:\Work>  [                                          ] |
 | Key bar: F3 View  F4 Edit  F5 Copy  F6 Move  F7 New folder  F8 Delete|
-| Status bar: active panel | transfer summary | messages               |
+| Status bar: active panel | Copying 42 % [x] | Deleting [x] | 3 ops v  |
 +----------------------------------------------------------------------+
 ```
 
-Search mode replaces the panels with the search strip, the filter pane and
-the results table. It has no command line and no key bar. The title bar, the
-lower pane and the status bar are the same in both modes.
+The Search page replaces the panels with the search strip, the filter pane,
+the results table and the inspector below the results. It has the key bar
+and no command line. The title bar and the status bar are the same on every
+page.
 
 | Region | WinUI composition |
 | --- | --- |
-| Title bar | `ExtendsContentIntoTitleBar` with a `MenuBar`. Windows draws the caption buttons. |
-| Workspace | One `Grid` row. Each mode is one `UserControl`, created when it first shows and then kept loaded, so a mode switch keeps focus, scroll and selection. The hidden mode's owners are inactive ([publication and activity](#publication-and-activity)). |
+| Title bar | `ExtendsContentIntoTitleBar` with a Back button at the left, then the icon, title and a `MenuBar`. Windows draws the caption buttons. |
+| Pages | One `Grid` row. Each page is one `UserControl`, created when it first shows and then kept loaded, so returning keeps focus, scroll and selection. A hidden page's owners are inactive ([publication and activity](#publication-and-activity)). |
 | Panel path row | A `DropDownButton` with a `MenuFlyout` for drives and recent folders, and an `AutoSuggestBox` for the editable path and its completion. |
-| Panel listing | `Syno.TableView` `Table`, bound to the active tab's rows. |
+| Panel listing | `Syno.TableView` `Table`, bound to the active tab's rows. An archive folder uses the same table. |
 | Panel summary | Text: marked count and size, totals, free space. |
 | Between panels | A vertical splitter. Its position is saved. |
-| Lower pane | One row behind a horizontal splitter with one remembered height. It shows File transfers, or the inspector where the mode shows it. It never opens by itself. |
-| Command line | An editor with the working folder as its visible label (PRODUCT.md, Command bar behavior). |
+| Quick View | `Ctrl+Q` replaces the other panel's listing with the inspector and the A18 preview. Closing it shows the other panel again. |
+| Search inspector | A pane below the results behind a horizontal splitter, with remembered visibility and height. |
+| Command line | An editor with the working folder as its visible label (PRODUCT.md, Command line behavior). |
 | Key bar | Buttons that invoke the command table's commands. They show its icon, key and availability. |
-| Status bar | Fixed-width groups that do not move when their text changes. |
+| Status bar | TinyTorrent2's design (`docs/contracts/ui/feedback.md`, Status bar): one item per operation and per `Shared.Work` task, in a stable order, each with a label, a stock `ProgressBar` and its own Stop button. The items are display only; a click on the progress does nothing. One `DropDownButton`, such as "3 operations", shows while any operation exists. Its menu lists every operation and has "Open File operations"; it also holds the items that do not fit. |
 | Dialogs | `ContentDialog`, one at a time, through one `MainWindow` entry point, as TinyTorrent2's `Shared.Dialog` and `Interact` do. |
-| Secondary windows | One `Window` per viewer. Each viewer has its own placement. |
+| Viewer windows | One `Window` per viewer. Each viewer has its own placement (B17). |
+
+Page navigation follows TinyTorrent2's `Shell.Navigation`:
+
+- Opening a page that is already in the history returns to that entry and
+  drops the entries after it, so no page appears twice. Opening the Commander
+  page clears the history. Commander, then Search, then Settings goes back to
+  Search, then to Commander.
+- Back is the title bar's Back button, `Alt+Left` on a secondary page and the
+  mouse back button. The Back button stays in place on every page and is
+  disabled on the Commander page, so the title bar never shifts. On the
+  Commander page `Alt+Left` is folder history (A04).
+- Every secondary page has a menu item that shows its key, because the menu
+  is the one visible list of pages.
+- Esc never navigates ([keyboard input](#keyboard-input)).
 
 Regions use native WinUI controls and theme resources. A custom control needs
 a demonstrated gap; gozler-ui's Win32 painting approvals do not carry over.
@@ -281,7 +326,8 @@ wide in English; that figure is not measured. After the first start, the
 window uses its saved placement.
 
 TinyTorrent2's `Controls.Pane`, `Controls.Splitter` and `Controls.MenuItems`
-already do what the lower pane, both splitters and the menus need.
+already do what the Search page's inspector pane, both splitters and the
+menus need.
 **Owner decision, 2026-11-01:** copy them into a new library here,
 `lib/Controls`, and leave TinyTorrent2 unchanged. TableView stays a thin
 table component, and Settings stays a settings library. Like those libraries,
@@ -344,7 +390,7 @@ pattern applies here, not its transport. `Shared.Engine` keeps the latest
 delivery of each kind, queues at most one apply on the `DispatcherQueue`, and
 discards a delivery whose sequence is not newer than the last one applied.
 Terminal operation states are never coalesced away, as the
-[native interface](#native-interface) requires.
+[engine libraries](#engine-libraries) require.
 
 ### Presentation owners
 
@@ -355,51 +401,52 @@ requests. Views keep native controls, focus, scrolling and window lifetime.
 | Owner | Owns |
 | --- | --- |
 | `App` | Startup, single-instance handoff, creation and closing of the engine session, and the main window. |
-| `Shell.MainWindow` | Chrome, the two mode views, dialogs, focus movement between regions, splitter mechanics and the order of the Close and Exit steps. |
-| `Shell.MainViewModel` | The shown mode and the active list: the active panel's tab in Commander mode, or the results in Search mode. Also the context for command availability, the message bar and the model steps of Close and Exit. |
+| `Shell.MainWindow` | Chrome, the page views, dialogs, focus movement between regions, splitter mechanics and the order of the Close and Exit steps. |
+| `Shell.MainViewModel` | The shown page, its navigation history and the active list: the active panel's tab on the Commander page, or the results on the Search page. Also the context for command availability, the message bar and the model steps of Close and Exit. |
+| `Shell.WorkStatus` | The status bar. It reads the ordered items of `Shared.Work` and `Operations.State` and owns only how they look. |
 | `Shell.Commands` | The one command table: identity, caption key, icon, default keys, availability and the owner that runs each command. The menu bar, context menus, key bar and keyboard accelerators are built from it. Configured shortcuts replace the default keys. |
 | `Shell.Inspector` | The inspector's activity, observation of the active list's accepted selection, subject, displayed content and the lifetime of its reads, under the rules of [publication and activity](#publication-and-activity). |
 | `Panels.Commander` | Both `Panel`s, the active side and Swap (A10). The other panel's folder is the default destination for Copy and Move. |
 | `Panels.Panel` | One side: its ordered tabs and the active tab. It has one tab until stage 6. |
 | `Panels.Tab` | One retained view. Its location is a folder, with its accepted rows, or a scoped search, with its `Search.Results`. It also holds history, sort, quick filter, focus, marks, scroll place and a generation number that rejects late results. |
 | `Panels.CommandLine` | The draft, history, completion requests, standalone `cd`, and launch through `Shared.Desktop`. |
-| `Operations.State` | The process-wide queue snapshot, reports and the entries that waiting and running operations have taken. Every window reads it. |
-| `Operations.Transfers` | One window's File transfers view: selection in the queue, Flip and Maximize. Pause, Cancel and reorder are requests to the engine. |
-| `Operations` drafts | The unfinished choices of one Copy, Move, Delete, New folder or Synchronize dialog, until the engine accepts or refuses the request. |
-| `Viewers.Viewer` | One viewer window's native viewer handle, bounded reads and placement. |
+| `Operations.State` | The queue snapshot, reports and the entries that waiting and running operations have taken. It builds one status item per operation from the engine's snapshot and asks the Mirror question. |
+| `Operations.Page` | The File operations page: the transfer and Delete lists and selection in them. Reorder, Pause, Stop, Cancel all copies and Cancel all deletes are requests to the engine. |
+| `Operations` drafts | The unfinished choices of one Copy, Move, Delete, New folder, Sync, Mirror or Multi-Rename request, until the engine accepts or refuses it. |
+| `Viewers.Viewer` | One viewer window's `Syno.Files` viewer reader, bounded reads and placement. |
 | `Settings` | Catalogue declarations for `Syno.Settings` and the typed preferences they bind. |
-| `Shared.Engine` | Native declarations, safe handles, the engine session and delivery to the dispatcher. |
-| `Shared.Work` | The policy for UI background work: off-thread execution, replacement by purpose, separation by location, slowness, delivery only while the task's window is open, and exit without waiting ([window rules](#window-rules)). |
-| `Shared.Storage` | Preferences and view state in SynapseCommander's data directory. It writes only the values that changed, so one window never undoes another window's save (goz `0ed6c44`). The engine's recovery records stay in the Rust owner's store. |
+| `Shared.Engine` | The `Syno.Files` engine instance and delivery of its snapshots to the dispatcher. |
+| `Shared.Work` | The policy for UI background work: off-thread execution, replacement by purpose, separation by location, slowness, delivery only while the task's window is open, and exit without waiting ([window rules](#window-rules)). It also owns the status item type that it and `Operations.State` supply: identity, label, progress, whether it can stop, outcome, owning page and start order. |
+| `Shared.Storage` | Preferences and view state in SynapseCommander's data directory. It writes only the values that changed, so one save never undoes another owner's change (goz `0ed6c44`). The engine's recovery records stay in `Syno.Files`' own store. |
 
 The model holds facts and identities, not display strings. Views format sizes,
 dates and captions from the current language and region.
 
-### Windows and owner scope
+### One process, one main window
 
-All windows run on the one UI thread, so an owner that several windows read
-needs no lock and no thread hop. gozler-ui made the same decision ("No thread
-per top-level window") in its window-architecture plan.
+The main window and the viewer windows run on the one UI thread, so an owner
+that a viewer also reads needs no lock and no thread hop. gozler-ui made the
+same decision ("No thread per top-level window") in its window-architecture
+plan.
 
-Extra main windows (B01) are windows of the same process. A second launch
-hands its request to the running process, which activates a window or opens
-another one. Every window can start operations, because all windows share one
-engine session and one queue, so two processes never compete for one recovery
-record. gozler-ui's extra window was a second process and therefore had no
-file operations; this product changes that on purpose.
+There is one process per data folder and one main window in it, with one
+engine session and one queue, so two sessions never resume one recovery
+record.
 
-| Scope | Owners |
-| --- | --- |
-| Process: one of each, created by `App` | `App`, the `Shared.Engine` session and delivery, `Operations.State`, `Shared.Storage`, the `Settings` preferences and configured shortcuts, the command definitions of `Shell.Commands`, the `Shared.Work` policy and the stall detector |
-| Main window: one set per window | `MainWindow`, `MainViewModel`, `Panels.Commander` with its panels and tabs, Search mode's `Search.Results`, `Shell.Inspector`, the lower pane's state, the window's command availability and accelerators, `Operations.Transfers`, the message bar and notifications |
-| Viewer window | `Viewers.Viewer` |
-
-- A window's owner reads process-wide owners. It never holds a reference to
-  another window's owners.
-- Closing a window ends its deliveries, observations and `Shared.Work` tasks.
-  Process-wide work and accepted operations continue.
-- A process-wide owner publishes to every window; it never names a window, as
-  [publication and activity](#publication-and-activity) requires.
+- **A second launch hands its request to the running process,** such as
+  `--search`, `--location`, `--reveal` or `--open`, and ends. The request
+  goes through a per-user, per-data-folder named pipe whose access list
+  admits the same user at medium integrity, so a normal start reaches an
+  elevated process. Windows App SDK `AppInstance` redirection across
+  integrity levels is not verified; use it only if a check proves it.
+- **An elevated start that finds a normal process** sends it the request and
+  Exit. The running process runs its normal Exit, including the operations
+  question. If the person keeps the operations, or a dialog is open, the
+  running window comes forward and the elevated start ends. Otherwise the
+  elevated start waits off the UI thread for the old process to end, then
+  takes the data folder.
+- **A viewer window** holds only `Viewers.Viewer`. Closing it ends its
+  deliveries and reads; it never keeps the process alive.
 
 ### Keyboard input
 
@@ -416,14 +463,60 @@ input precedence (`docs/contracts/ui.md`, Keyboard and accessibility):
    Shift+F10 for the context menu.
 5. The focused panel: typed characters start quick search, Backspace opens
    the parent folder and Tab moves to the other panel.
-6. The window's accelerators from `Shell.Commands`: function keys, Alt and Ctrl
-   chords, and F6 and Shift+F6 between regions.
+6. The window's accelerators from `Shell.Commands`: function keys and Alt and
+   Ctrl chords. F6 is Move, as in Total Commander, not Windows' move between
+   regions.
 
 `Shell.Commands` resolves keys. Each command declares its key and whether it
-also runs while a text editor has focus. Function keys and the mode switches
-(F3 to F8, Alt+F7, Alt+F12) run there; keys that an editor uses never do. A key
+also runs while a text editor has focus. Function keys and the page keys (F3
+to F8, Alt+F7, Ctrl+M) run there; keys that an editor uses never do. A key
 has one owner at each level. Settings refuses a configured shortcut that a
 lower level already owns, and says which owner has it (B19).
+
+**Esc closes temporary UI only** (owner decision, 2026-11-01, from
+Microsoft's [keyboard interactions](https://learn.microsoft.com/en-us/windows/apps/develop/input/keyboard-interactions)
+guidance). It closes the open dialog, menu or popup, and a dialog waiting
+behind it then shows. A text editor keeps its own Esc; on the Search page Esc
+clears the search box. Esc never navigates back, never stops an operation and
+never asks whether to stop one.
+
+One key map serves every page (owner decision, 2026-11-01). Total Commander's
+key is kept unless the table says otherwise.
+
+| Key | Commander page | Search page | Other pages |
+| --- | --- | --- | --- |
+| F2 | Rename (A03); Total Commander uses it for refresh | Rename | — |
+| F3 / F4 | View / Edit with the external editor | View / Edit | — |
+| F5 / F6 | Copy / Move or rename, through the Copy dialog | Copy / Move | — |
+| Shift+F6 | Rename in place | — | — |
+| F7 | New folder | — | — |
+| F8, Delete | Delete, permanently | Delete | — |
+| Shift+F2 | Mark differences between the panels (A21) | — | — |
+| Alt+F1 / Alt+F2 | Left / right drive menu | — | — |
+| Alt+F7 | Search page | — | Search page |
+| Alt+Shift+F7 | Search page scoped to the active panel's folder | — | — |
+| Ctrl+M | Multi-Rename page with the captured marks | Same | — |
+| Ctrl+F | Search in the active panel | Focus the search box | — |
+| Ctrl+Q | Quick View | — | — |
+| Ctrl+R | Refresh | Run the search again | Refresh where the page has one |
+| Ctrl+S | Quick filter | — | — |
+| Ctrl+L | Path box | Search box | — |
+| Alt+Left / Alt+Right | Folder history back / forward (A04) | Back | Back |
+| Alt+Down | Folder history list | — | — |
+| Alt+Shift+Enter | Size all folders in the panel (A20) | — | — |
+| Ctrl+D | Favorites | — | — |
+| Ctrl+T / Ctrl+W / Ctrl+Tab | New / close / next tab (A07) | — | — |
+| Ctrl+U | Swap panels (A10) | — | — |
+| Ctrl+C / X / V | File clipboard (A02); text in a text editor | Same | — |
+| Ctrl+Enter / Ctrl+Shift+Enter / Ctrl+P | Insert name / full path / current path into the command line (A01) | — | — |
+| Insert, Space, Num+, Num−, Num* | Mark, mark, select mask, unselect mask, invert (A11) | Mark | — |
+| Alt+Enter | Properties | Properties | — |
+| Tab | Other panel | Next control | Next control |
+| Esc | Closes quick search or the quick filter | Clears the search box | Closes temporary UI only |
+
+The File operations page has no default key, as in Total Commander; the
+status bar's operations button and the menu open it. FTP is not planned, so
+Total Commander's FTP keys, such as Ctrl+F, are free.
 
 ### Publication and activity
 
@@ -438,7 +531,7 @@ and Library.
   accepted state and raises its change notification. It names no consumer and
   starts no consumer's reads.
 - Each consumer owns its activity. It derives activity from its own facts: the
-  mode shown, the pane open, its tab current, the window minimized. While
+  page shown, the pane open, its tab current, the window minimized. While
   active, it observes. When it becomes inactive, it detaches and cancels its
   work once. When it becomes active again, it reads the current state and does
   not replay the changes it missed.
@@ -450,14 +543,14 @@ and Library.
 | Publisher and state | Consumers that observe it |
 | --- | --- |
 | `Panels.Tab` and Search results: accepted selection and focus | `Shell.Inspector`, `Shell.Commands` availability, the status bar |
-| `Shell.MainViewModel`: shown mode and active list | `Shell.Inspector`, `Shell.Commands`, each tab's activity |
-| `Shared.Engine`: accepted and finished operations with their affected folders | `Operations.State`, which publishes the queue and the taken entries |
-| `Operations.State`: queue, reports and taken entries | Each window's `Operations.Transfers`, and each `Panels.Tab` for its rows and its own folder |
+| `Shell.MainViewModel`: shown page and active list | `Shell.Inspector`, `Shell.Commands`, each tab's activity |
+| `Shared.Engine`: accepted and finished operations with their affected folders | `Operations.State`, which publishes the queue, the status items and the taken entries |
+| `Operations.State`: queue, status items, reports and taken entries | `Shell.WorkStatus` on every page, `Operations.Page` while it shows, and each `Panels.Tab` for its rows and its own folder |
 
-A tab is active while its mode shows and it is its panel's current tab. An
-inactive tab stops watching its folder and makes no reads, as gozler-ui's
-panels do while Search shows. A tab that becomes active reads its folder
-again.
+A tab is active while the Commander page shows and it is its panel's current
+tab. An inactive tab stops watching its folder and makes no reads, as
+gozler-ui's panels do while Search shows. A tab that becomes active shows its
+last rows as not yet confirmed and reads its folder again.
 
 ### Window rules
 
@@ -493,8 +586,8 @@ because XAML owns rendering.
 | **Before the focused element is hidden or disabled, its owner moves focus on purpose.** | Windows drops the focus of a control that it disables, so the plan had to order structure changes, refresh and focus. |
 | **A dialog started by an engine event or a reply waits behind the open dialog,** through the one dialog entry point. | Dialogs that replies opened ran before older replies were applied (window rule 13). WinUI also throws when a second `ContentDialog` opens. |
 | **Exit hides the window, stops deliveries, requests cancellation and lets essential writes finish off the UI thread.** | Exit joined threads that waited for a dead share or a permission prompt. |
-| **An area, a Settings page or a secondary window is created when it first shows.** | Opening Settings took 325 ms and the main window 627 ms before first show, until `32cfeb4` created pages and the File operations window on first use. |
-| **Pane state is model state.** The lower pane's open, compact and maximized state live in `Shell.MainViewModel`, not in the pane control, and every mode uses the same state. | TinyTorrent2's Search page kept its own splitter, height and maximized state, and the maximized state lived in the `Pane` control (`15-workspace-shell-study.md`, `43ae7bc`). |
+| **A page, a Settings section or a viewer window is created when it first shows.** | Opening Settings took 325 ms and the main window 627 ms before first show, until `32cfeb4` created pages and the File operations window on first use. |
+| **Page and pane state is model state.** The shown page, the navigation history, Quick View and the Search inspector pane's open state and height live in `Shell.MainViewModel`, not in a control. | TinyTorrent2's Search page kept its own splitter, height and maximized state, and the maximized state lived in the `Pane` control (`15-workspace-shell-study.md`, `43ae7bc`). |
 
 The plan's main finding was that nothing enforced these rules. Here they are
 enforced from the first commit of the product:
@@ -529,11 +622,50 @@ TinyTorrent2 in `11be2e8`. These rules follow from those changes.
   `Operations`. A person's acknowledgement of a report never delays the
   release of taken entries or the panel's re-read. gozler-ui had released
   them only after the person reported the failures (`copy-behaviour.md`).
-- **A batch action is one engine request.** Cancel all is one request over the
-  captured operations, not a loop of single cancels.
+- **A batch action is one engine request.** Cancel all copies and Cancel all
+  deletes are each one request over the captured operations of one lane, not
+  a loop of single stops.
 - **A command reports what the engine did.** A cut and Paste shows "moved"
   only after the engine reports the move, not at submission.
-- **Progress never opens a pane or takes focus.**
+- **Progress never opens a page or takes focus.** Starting an operation keeps
+  the current page.
+
+The scheduling rules are the engine's; these owner rulings of 2026-11-01 say
+what it must do ([ADR 0003](adr/0003-copy-and-delete-lanes.md)):
+
+- **Two lanes, one scheduler.** Transfers (Copy, Move, Sync, Mirror) and
+  Deletes wait in separate lanes. A Delete never waits for a transfer and a
+  transfer never waits for a Delete. Each lane counts its own users of each
+  disk, against Transfers per device or Deletes per device: the person's
+  settings, from 1 to 3, default 1. In goz a Delete takes no disk and never
+  waits (`prepare.rs`); here the Delete lane is part of the engine from the
+  start. New folder never waits.
+- **The person orders the queue; the engine decides the threads.** Moving a
+  waiting operation ahead of a running one in the same lane on the same disk
+  starts it and pauses the running one, which resumes, with its progress, when
+  its turn comes. A running operation can also be moved down. Work on other
+  disks is not affected, and an operation the person paused stays paused. goz
+  `Queue::move_waiting` is the reference for waiting transfers; here Deletes
+  and a running operation move the same way. SynapseCommander always uses the
+  engine's automatic speed values and shows no speed presets.
+- **Stop keeps finished work.** Each operation's status bar item has its own
+  Stop. The report says how far the operation got, such as "Stopped: 37 of
+  120 copied". Stop asks nothing.
+- **Mirror asks once before it deletes.** When a Mirror's comparison ends with
+  entries to delete, the engine waits before copying anything, holding no
+  disks. `Operations.State` queues one question through the dialog entry
+  point, and the status bar item says that Mirror waits for an answer:
+  - Title: "Mirror C:\Work to D:\Backup\Work".
+  - Text: "Mirror will permanently delete 1,240 files and 85 folders (3.2 GB)
+    from D:\Backup\Work because they aren't in C:\Work."
+  - Buttons: Delete them, Cancel Mirror, and Keep them as the default Close
+    button, so Enter and Esc delete nothing. Keep them finishes the same
+    comparison as a Sync.
+
+  A Mirror with nothing to delete never asks. The engine's per-file checks
+  before each deletion still run after the answer. The comparison's summary
+  carries the file count, the folder count and the bytes to delete; goz's
+  `ComparisonSummary` counts files and folders together and has no bytes.
 - **An action that outlives its dialog belongs to an owner that outlives the
   dialog,** and it ends in a typed outcome: done, cancelled, refused, or failed
   with a reason. gozler-ui's service fixes ran and were forgotten, so a
@@ -545,8 +677,8 @@ A folder listing:
 
 1. `Panels.Tab` asks `Shared.Engine` to read its folder and gives the request
    a new generation number. The UI thread does not wait.
-2. The Rust owner reads and sorts the folder and delivers a snapshot, or pages
-   for a large result.
+2. `Syno.Files` reads and sorts the folder off the UI thread and delivers a
+   snapshot, or pages for a large result.
 3. `Shared.Engine` posts the delivery to the window's `DispatcherQueue`.
 4. The tab discards a delivery that has an old generation or arrives after the
    tab closed. Otherwise it replaces its rows in one update and keeps focus,
@@ -561,8 +693,8 @@ A command:
    entries or else the focused entry, and the default destination.
 3. The owning feature opens its draft or dialog, or sends the request to the
    engine.
-4. `Operations.Transfers` presents the engine's state. A finished operation
-   names its affected folders. Each active tab that shows one of them reads
+4. `Operations.State` presents the engine's state in the status bar and on the
+   File operations page. A finished operation names its affected folders. Each active tab that shows one of them reads
    it again; an inactive tab reads when it becomes active.
 
 A later change of the active panel cannot redirect a captured command.
@@ -573,12 +705,13 @@ One engine session owns the application's operation queue. Panel/tab/viewer
 lifetime is independent of accepted operations. Closing a tab or search view
 releases observations and cancels its reads, not unrelated transfers.
 
-Restore engine recovery state before enabling new mutations. Rust writes
-recovery records; C# writes presentation settings. SynapseCommander uses its
-own data directory and never opens gozler-ui's live queue as its own. Extra
-windows run in the one process ([windows and owner scope](#windows-and-owner-scope)),
-and a second launch hands off to it instead of opening its own engine
-session, so two processes never resume one record.
+Restore engine recovery state before enabling new mutations. `Syno.Files`
+writes recovery records in its own format; `Shared.Storage` writes
+presentation settings. SynapseCommander uses its
+own data directory and never opens gozler-ui's live queue as its own. A
+second launch hands off to the running process instead of opening its own
+engine session ([one process, one main window](#one-process-one-main-window)),
+so two processes never resume one record.
 
 Closing behavior is explicit:
 
@@ -589,15 +722,15 @@ Closing behavior is explicit:
 - Shutdown rejects new requests, invalidates UI deliveries, requests engine
   cancellation and completes required persistence off the UI thread. Preserve
   the engine's guarantees about unfinished outputs and interrupted work.
-- Dispose delivery subscriptions before releasing their targets. Keep the
-  DLL loaded while any native handle, callback or engine thread can use it.
-  Finalizers are a fallback, not a blocking shutdown path.
+- Dispose delivery subscriptions before releasing their targets. Release
+  every native handle through its `SafeHandle` after the engine thread that
+  uses it has ended. Finalizers are a fallback, not a blocking shutdown path.
 - Session end and process crashes may interrupt writes; atomic recovery state
   and truthful next-start reporting matter more than promising completion.
 
-The exact stop protocol must follow the current engine, including copy
-cancellation and unfinished-output semantics; an interop wrapper must not
-silently alter them.
+The stop protocol follows goz `docs/DESIGN.md`'s copy cancellation and
+unfinished-output rules: a stopped copy removes only its own unfinished file,
+and an interrupted copy resumes inside the file.
 
 ## Dependency and release contract
 
@@ -608,16 +741,16 @@ Windows App Runtime versions and obtains missing prerequisites. Installer
 generation and publication are separate actions.
 
 Build shared C# libraries through project references to their original source
-owners. Build the Rust DLL through its original source owner. The application
-release includes their assemblies/DLL, XAML resources, fonts, assets and required
-license notices. Separate NuGet/native package publication and a package feed
-are not prerequisites for reuse or release. Existing third-party NuGet
-dependencies retain their normal restore workflow.
+owners. The application release includes their assemblies, any native library
+such as `7z.dll`, XAML resources, fonts, assets and the required license
+notices. Separate NuGet/native package publication and a package feed are not
+prerequisites for reuse or release. Third-party NuGet dependencies, such as
+SharpCompress, keep their normal restore workflow.
 
 One product release version identifies the application and installer. Record
-the shared source revisions, ABI version, architecture and checksums in release
-metadata. Load the matching DLL from the controlled installation directory;
-do not search PATH or the current folder for a substitute.
+the shared source revisions, architecture and checksums in release metadata.
+Load a native library only from the controlled installation directory; do not
+search PATH or the current folder for a substitute.
 
 Plan a root `Release.cmd` entry point and `installer/Build.ps1`, following
 TinyTorrent's build, publish, validation, optional signing and installer staging
@@ -633,14 +766,14 @@ App SDK versions and runtime requirements from verified toolchain/platform
 requirements in the foundation stage. Each additional architecture needs its
 matching binaries.
 
-Missing/incompatible engine artifacts give an actionable startup error before
-mutations. Missing/incompatible indexing service affects indexed features;
+A missing or incompatible native library, such as `7z.dll`, disables only the
+feature that needs it, with the reason; it never stops startup.
+Missing/incompatible indexing service affects indexed features;
 ordinary folder browsing and file operations remain useful. Shared helpers
 must tolerate index absence rather than introducing an implicit service
 requirement for copy/delete.
 
-Testing covers the shared engine once in its own repository, ABI lifetimes and
-compatibility through the real DLL, and C# presentation behavior separately.
-Measure representative operations through direct Rust and DLL consumers before
-claiming parity of speed or memory use. A shared implementation prevents
-algorithm drift; it does not automatically prove the wrapper has no overhead.
+Testing covers the engine libraries with their own checks on real temporary
+folders and a fake gozlerd pipe, and C# presentation behavior separately.
+Measure representative operations against goz `docs/BENCHMARKS.md` on the same
+machine before claiming parity of speed or memory use with gozler-ui.
