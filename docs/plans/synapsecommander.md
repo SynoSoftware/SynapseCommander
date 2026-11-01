@@ -28,14 +28,39 @@ contracts, and Fluent 2 and Windows conventions. Where a judgment needs a
 point of view those do not give, the lead roleplays the expert or the user it
 needs (a WinUI and Fluent reviewer, a busy person with 100,000 files in a
 folder), decides, and writes the decision and its reason into this plan.
-Starting a stage authorizes everything that stage lists. The only stop is one
-the rules already name: the same build error or test failure after a fix,
-which the lead reports in its final report and works around where it can.
+Starting a stage authorizes everything that stage lists, except what the two
+exceptions below hold for the owner. The only stop is one the rules already
+name: the same build error or test failure after a fix, which the lead
+reports in its final report and works around where it can.
 
 Git actions, such as a commit or a push, still need the owner's request.
 
-Decisions the lead made under this ruling. Each reason is in the linked
-section.
+**Owner ruling, 2026-11-01: a departure from Total Commander's behavior
+needs the owner's approval.** This is the first exception to deciding without
+asking. Total Commander's keys, gestures, commands and what each command does
+are the interaction model; a departure is written into this plan only after
+the owner approves it, with Total Commander's behavior and the reason. Until
+the owner approves a proposed departure, the work follows Total Commander's
+behavior, so no stage stops for the answer. The owner rulings recorded in
+these documents, such as F2 for Rename, Ctrl+L for the path box, the pages
+and the permanent Delete, are approved departures. Controls and visuals
+follow WinUI 3 and Fluent 2 and are not departures from Total Commander.
+
+**Owner ruling, 2026-11-01: every piece of UI is prototyped first and
+approved by the owner.** Each window, page, dialog, pane, flyout, menu, bar
+and status item is first built as a throwaway prototype with the
+`prototype` skill and shown to the owner. Its real implementation starts
+only after the owner approves that prototype, and it follows the approved
+prototype; a change to an approved UI gets a new prototype and approval.
+This is the second exception to deciding without asking. While a prototype
+waits for approval, the stage goes on with its other work, such as engine
+behavior and presentation owners, and that UI's implementation waits. Each
+stage's completion evidence names the approved prototypes it implemented.
+Controls and visuals are part of what a prototype shows and the owner
+approves.
+
+Decisions the lead made under the first ruling, that the work never stops to
+ask. Each reason is in the linked section.
 
 | Date | Decision | Where |
 | --- | --- | --- |
@@ -46,6 +71,16 @@ section.
 | 2026-11-01 | Copy and delete are built and measured first; the measurement chooses the methods | Stage 1 |
 | 2026-11-01 | Recovery records use SynapseCommander's own format | [Lifetime, persistence and recovery](../ARCHITECTURE.md#lifetime-persistence-and-recovery) |
 | 2026-11-01 | Archives: .NET for ZIP, TAR and TGZ; SharpCompress for 7z and RAR reading; 7z creation by SharpCompress or `7z.dll`, checked in stage 6 | [Responsibility map](../ARCHITECTURE.md#responsibility-map) |
+| 2026-11-01 | `IndexChecks` compares the port with goz's protocol version and query files, because gozlerd serves one version | [Responsibility map](../ARCHITECTURE.md#responsibility-map) |
+| 2026-11-01 | A search list that lost its gozlerd snapshot searches again and keeps the focus and marks by path | [Engine libraries](../ARCHITECTURE.md#engine-libraries) |
+| 2026-11-01 | Rename, New folder and a same-volume Move take no disk and never wait; a Rename or Move of a waiting transfer's source follows the owner's ruling on Delete | [Operations in the window](../ARCHITECTURE.md#operations-in-the-window) |
+| 2026-11-01 | An operation is saved at Exit when it has a recovery record; PRODUCT B16 reads "Durable started work" | [Operations in the window](../ARCHITECTURE.md#operations-in-the-window) |
+| 2026-11-01 | The goz checkout's newest release tag, not its working tree, is the version `Syno.Index` follows | [Responsibility map](../ARCHITECTURE.md#responsibility-map) |
+| 2026-11-01 | `cm_LeftOpenDrives` and `cm_RightOpenDrives` are Covered by Alt+F1 and Alt+F2, to agree with the owner's key map | [Command list](../total-commander-commands.md) |
+| 2026-11-01 | goz's admission rules apply to both lanes; one state type and a sequence check hold the queue's rules | [Operations in the window](../ARCHITECTURE.md#operations-in-the-window) |
+| 2026-11-01 | Exit ends within 10 seconds; a second launch waits up to 10 seconds for a process without a window | [Engine libraries](../ARCHITECTURE.md#engine-libraries), [One process, one main window](../ARCHITECTURE.md#one-process-one-main-window) |
+| 2026-11-01 | Copy methods are measured for SSD to SSD on this machine; other drive pairs use goz's Automatic values until measured | Stage 1 |
+| 2026-11-01 | A restart in either direction starts the new process before the running one stops anything; the new process continues the refused operation at its refused file during recovery | [One process, one main window](../ARCHITECTURE.md#one-process-one-main-window) |
 
 ## Lessons from earlier plans
 
@@ -54,10 +89,13 @@ Both projects already corrected structural mistakes through refactoring
 plans. Learn from those plans before the skeleton is built, so the same
 mistakes are not designed in again.
 
-Record a lesson only when a plan corrected a structural cause that a WinUI C#
-presentation could repeat. Write it once, at its owner in
-[ARCHITECTURE.md](../ARCHITECTURE.md), with the source plan and commit. An
-engine-internal lesson stays with the engine libraries. The
+Record a lesson only when a plan corrected a structural cause that this
+product's presentation or its C# engine libraries could repeat. Write it once,
+at its owner in [ARCHITECTURE.md](../ARCHITECTURE.md), with the source plan
+and commit; an engine lesson goes to
+[Engine libraries](../ARCHITECTURE.md#engine-libraries). Where goz built a
+lesson into its engine, goz `docs/DESIGN.md` holds it, and the stage that
+builds that behavior reads it there. The
 [window rules](../ARCHITECTURE.md#window-rules), and their first rule, that
 the window never blocks, are not weakened by any lesson.
 
@@ -67,7 +105,9 @@ the window never blocks, are not weakened by any lesson.
 | goz `window-architecture.md` (`a2daf14` to `c698a56`) and `ui-architecture-fixes.md` | Done | [Window rules](../ARCHITECTURE.md#window-rules) |
 | TinyTorrent2 `15-workspace-shell-study.md`, `14-removed-torrents-plan.md`, `tableview-performance-plan.md`, `communication-plan.md`, `library-cache-plan.md`, `payload-move-plan.md`; the restructuring commits `1faab3f` and `7eb19cc` | Done | [Window rules](../ARCHITECTURE.md#window-rules), [Operations in the window](../ARCHITECTURE.md#operations-in-the-window), [Tables](../ARCHITECTURE.md#tables), [Engine libraries](../ARCHITECTURE.md#engine-libraries) |
 | goz `window-responsiveness.md`, `locations-that-do-not-answer.md`, `maintainability.md`, `result-snapshot.md`, `paths-through-links.md`, `copy-behaviour.md`, `service-repair.md`, `file-manager-spec.md`; the commits `3b307e5`, `0ed6c44`, `d52b4ff` | Done | The same sections, and `Shared.Storage` in [Presentation owners](../ARCHITECTURE.md#presentation-owners) |
-| TinyTorrent2 `torrent-control-plan.md` and audit, `drive-work-plan.md`, `peer-map-plan.md`, `subtitles-records-plan.md`, the indexing and crawl research; goz `faster-start.md`, `visibility-plan.md`, `service-settings.md`, `copy-policies.md`, `sorted-index.md`, the early `ui-*.md` plans, `window-painting.md` | Done: no new presentation lesson. Their lessons are engine-internal, specific to the domain or to Win32 painting, or already recorded above. | |
+| goz `locations-that-do-not-answer.md` (a plan, not yet in DESIGN.md); TinyTorrent2 `torrent-control-plan.md` and `drive-work-plan.md`, through their results in `docs/contracts/engine/lifetime.md` ("Exit ends within 10 seconds") and `files.md` ("Where a folder really is"); goz DESIGN "Result snapshots" and "Running windows" | Done | [Engine libraries](../ARCHITECTURE.md#engine-libraries), [One process, one main window](../ARCHITECTURE.md#one-process-one-main-window) |
+| goz `copy-behaviour.md` and its earlier form `copy-policies.md` (retired in `8ec9f8c`) | Done: DESIGN "Device admission", "Interrupted operations" and "Synchronize folders" hold their rules, which [Operations in the window](../ARCHITECTURE.md#operations-in-the-window) adopts | |
+| TinyTorrent2's torrent-control audit, `peer-map-plan.md`, `subtitles-records-plan.md`, the indexing and crawl research; goz `faster-start.md` (retired in `cce0398`), `sorted-index.md` (`7b4cdc0`), `visibility-plan.md`, `service-settings.md`, the early `ui-*.md` plans, `window-painting.md` | Done: no new lesson. Their lessons are gozlerd's own, specific to the torrent domain or to Win32 painting, or already recorded above. | |
 
 **Completion:** every source is Done or recorded as having no presentation
 lesson, and the skeleton in stage 0 starts after this review.
@@ -93,10 +133,9 @@ lesson, and the skeleton in stage 0 starts after this review.
    Windows integration.
 5. Move the Settings projects and the solution from TinyTorrent2's removed
    `lib/Lucide` to `lib/Glyphs`. Today their build stops at the
-   `RequireComponents` check against the current TinyTorrent2 checkout. Lower
-   Settings from Windows App SDK 2.6.4 to TinyTorrent2's 2.5.1, following the
-   [version rule](../ARCHITECTURE.md#projects); a failing build names the API
-   that sets the minimum.
+   `RequireComponents` check against the current TinyTorrent2 checkout. Keep
+   Settings on the latest released Windows App SDK, following the
+   [version rule](../ARCHITECTURE.md#projects).
 6. Create `lib/Controls` (`Syno.Controls`) with copies of TinyTorrent2's
    `Controls.Pane`, `Controls.Splitter` and `Controls.MenuItems` at
    `446b3f2` (owner decision, 2026-11-01). Do not change TinyTorrent2. The
@@ -110,11 +149,17 @@ lesson, and the skeleton in stage 0 starts after this review.
      solution and `Build.ps1`.
 7. Build the window skeleton that
    [WinUI application structure](../ARCHITECTURE.md#winui-application-structure)
-   describes. It contains no listing, search or operation code:
+   describes. It contains no listing, search or operation code. The window's
+   XAML waits for the owner to approve its prototype
+   ([How decisions are made](#how-decisions-are-made)); the projects,
+   `MainViewModel` and its page history, `Shell.Commands`, `Shared.Work` and
+   the window-rule enforcement do not wait:
    - The three projects: the WinUI application in `app/src`, Presentation in
      `app/presentation` without a WinUI reference, and `PresentationChecks`.
-   - `App`, `MainWindow` and `MainViewModel`, with the title bar, its Back
-     button and the menu bar.
+   - `App`, `MainWindow` and `MainViewModel`, with the title bar copied from
+     TinyTorrent2's caption (its Back button, the menu bar and the theme
+     button), as the Title bar row of
+     [Main window](../ARCHITECTURE.md#main-window) describes.
    - The Commander page and an empty Search page until stage 4, with page
      navigation and its history.
    - Two panels, each with the drive button, path box, a `Table` with Name,
@@ -150,9 +195,11 @@ deliberate cases are removed afterwards. The window reopens at its saved
 placement on the Commander page. `Tab` moves the active side and the keyboard
 focus together. `Alt+F7` opens the Search page, and Back, `Alt+Left` and the
 mouse back button return to the Commander page with its focus kept. The Back
-button stays in place, disabled, on the Commander page. The menu bar, the key
-bar and a key show the same command with the same availability. Screenshots
-show Light, Dark and High Contrast.
+button is hidden on the Commander page. The menu bar, the key bar and a key
+show the same command with the same availability. The theme button switches
+between Light and Dark, and the caption buttons follow it, as in
+TinyTorrent2. Screenshots show Light, Dark and High Contrast beside
+TinyTorrent2's title bar in the same theme.
 
 ## Stage 1: the C# engine's first slice
 
@@ -165,12 +212,20 @@ delete engine", "File operations", "Device admission") and goz
    unbuffered I/O, an overlapped ring, parallel POSIX delete). Run them on the
    test folders that goz `docs/BENCHMARKS.md` describes, on the owner's machine
    as recorded there, and record the results beside goz's numbers in
-   `FilesChecks`. The fastest correct method for each pair of drive kinds
-   becomes the default; the measurement does not reopen the choice of C#.
+   `FilesChecks`. This machine has one NVMe SSD, so it measures SSD to SSD
+   only (goz `docs/BENCHMARKS.md`). The fastest correct method there becomes
+   that pair's default. Hard disks, USB drives, shares and two separate disks
+   use goz's Automatic values until they are measured, and the After install
+   list names those measurements. The measurement does not reopen the choice
+   of C#.
 2. Build the queue with its two lanes, Transfers per device and Deletes per
    device, order changes including moving ahead of a running operation, pause,
    Stop and Cancel all for each lane, and the recovery record in this
-   product's own format.
+   product's own format. Follow the queue rules, the operation state type and
+   its sequence check in
+   [Operations in the window](../ARCHITECTURE.md#operations-in-the-window),
+   and the bounded close and the locations that do not answer in
+   [Engine libraries](../ARCHITECTURE.md#engine-libraries).
 3. Build delivery: snapshots, one signal per change, and `Shared.Engine`'s
    drain and apply ([engine libraries](../ARCHITECTURE.md#engine-libraries)).
    `Syno.Files` takes its index as a dependency, so checks run with none.
@@ -191,7 +246,9 @@ rule of goz `DESIGN.md` that this slice implements: a link is deleted and
 never followed, two selected entries never overwrite each other, a stopped
 copy removes only its own unfinished file, an interrupted copy resumes inside
 the file, and a running Delete stops between items and keeps what it already
-deleted. No engine host or service is installed or spawned.
+deleted. The queue's sequence check passes. With a thread held in a call that
+does not return, engine close lets the process end at 10 seconds. No engine
+host or service is installed or spawned.
 
 ## Stage 2: folder workflow and command line
 
@@ -212,7 +269,10 @@ commands that each stage implements.
    (A20). Capture commands once; hidden marks never turn into unseen
    destructive targets.
 4. Complete panel clipboard actions, incoming/outgoing drag/drop and Rename,
-   routing mutations through the stage 1 engine.
+   routing mutations through the stage 1 engine. One bounded check shows
+   whether WinRT `Clipboard` works from `Shared.Desktop`'s apartment thread;
+   if it does not, that thread uses the OLE clipboard calls. Record the
+   result here.
 5. Build the editable command line using PRODUCT.md's rules. Add terminal
    launch, recall/draft, name/path insertion and cancellable path completion.
 6. Fill the key bar and apply the
@@ -257,7 +317,7 @@ proves it:
 | --- | --- |
 | Existing-file policies and conflicts, from goz `DESIGN.md` "File operations" | Each policy on a prepared destination gives the documented result; two selected entries never overwrite each other |
 | Sync and Mirror comparison, from goz "Synchronize folders" and decision D13 | Mirror deletes only unchanged destination-only entries, after every required copy succeeded and each entry is checked again |
-| A direct Mirror with deletions waits after its comparison; the summary has file count, folder count and bytes; the commit can finish as a Sync | Nothing is copied before the answer; Keep them deletes nothing |
+| A direct Mirror with deletions waits after its comparison; the summary has file count, folder count and bytes; the commit can finish as a Sync | Nothing is copied before the answer; Keep them deletes nothing; Stop while it waits withdraws the question, and a late answer does nothing |
 | The two-lane queue from stage 1 under real operations | A Delete waits for a Delete on its disk, never for a copy; moving an operation ahead of a running one pauses the displaced one, which resumes with its progress; Cancel all deletes leaves transfers running |
 | Comparison marks for A21 | New and newer entries on each side are marked; equal entries are not |
 
@@ -274,8 +334,10 @@ Deliver B06-B09, B18 and the remaining search actions of B10-B11.
 
 1. Build `Syno.Index`: port the query parser, the pipe protocol with its trust
    checks and the output rules from goz to C#. `IndexChecks` are built from
-   goz's query tests and help examples and run against a fake pipe server, so
-   drift between the two parsers fails a check.
+   goz's query tests and help examples and run against a fake pipe server.
+   They also compare the port with the protocol version and query files of
+   goz's newest release tag
+   ([query parser](../ARCHITECTURE.md#responsibility-map)).
 2. Present global and in-panel search, every match mode/filter, scoped queries,
    highlighting, columns, selection snapshots and inspector metadata. Search
    reads names from the index only; it never looks inside files or archives.
@@ -289,9 +351,14 @@ Deliver B06-B09, B18 and the remaining search actions of B10-B11.
 5. Preserve useful local browsing and operations without a compatible service.
 
 **Proof:** fixture-driven cases preserve query/output semantics and snapshots
-without a live service. One bounded integration check uses an explicitly selected
-compatible test service without changing the user's installed service. Large
-results stay bounded; a sort, new query or closed view rejects stale replies.
+without a live service. A second gozlerd cannot run beside the installed one,
+because the pipe name is fixed and the daemon takes it as the first instance.
+So one bounded, read-only check uses the installed gozlerd when it is
+present: the trust check, one query, one page and its release. It is an
+owner-only environment check and never stops, replaces or reconfigures the
+service. Large results stay bounded; a sort, new query or closed view rejects
+stale replies. A list whose snapshot gozlerd dropped searches again and keeps
+its focus and marks by path.
 
 ## Stage 5: viewers and application/settings parity
 
@@ -304,7 +371,8 @@ Deliver B01, B17, B19-B21 and finish any uncovered baseline behavior.
    transaction dialogs and reset, persistence, configurable
    shortcuts/context actions and index diagnostics/administration.
 3. Implement application activation, optional tray behavior, single-instance
-   handoff and the elevation rule
+   handoff, whole-window elevation from an access-denied failure and the
+   Administrator button that returns to a normal process
    ([one process, one main window](../ARCHITECTURE.md#one-process-one-main-window)),
    startup/global shortcuts and own-product update workflow. With the tray
    option on, Close hides the window; Exit asks once while operations run.
@@ -359,7 +427,8 @@ verification; an incomplete index never looks like a complete branch listing.
 ## Completion and verification discipline
 
 All baseline and addition IDs remain pending. On completion, append the ID,
-engine/app revision and concise evidence to this plan; stages above provide the
+the app revision, the TinyTorrent2 commit it built against
+([Projects](../ARCHITECTURE.md#projects)) and concise evidence to this plan; stages above provide the
 initial pending checklist. Do not mark grouped IDs complete when only part of
 their behavior landed.
 
@@ -392,13 +461,14 @@ not listed here.
 
 | Call | Can wait because | Owner | Stage |
 | --- | --- | --- | --- |
+| Read of preferences and view state at start, such as the saved placement | Disk read | `App` reads them through `Shared.Storage` off the UI thread before it creates the main window, so no shown window waits | 0 |
 | Save of preferences and view state | Disk write | `Shared.Storage` through `Shared.Work` | 0 |
 | Drive list, labels and free space | A sleeping or disconnected drive or share | `Panels` through `Shared.Work` | 2 |
 | File and folder icons from the shell | The shell reads the file or its handler on a slow path | `Panels` through `Shared.Work` | 2 |
 | Path exists or is a folder, for the path box and `cd` | A share that does not answer | `Panels` through `Shared.Work` | 2 |
 | Shell launch: Open, Open with, Explorer, Properties, the terminal, the external editor | The shell resolves the path and starts a process | `Shared.Desktop` through `Shared.Work` | 2 |
-| Clipboard read and write | Another program holds the clipboard | `Shared.Desktop` through `Shared.Work` | 2 |
-| Drop data read | The source program answers slowly | `Shared.Desktop` through `Shared.Work` | 2 |
+| Clipboard read and write | Another program holds the clipboard | `Shared.Desktop` on its OLE apartment thread, tracked by `Shared.Work` | 2 |
+| Drop data read | The source program answers slowly | `Shared.Desktop` through an agile reference, tracked by `Shared.Work` | 2 |
 
 ## Open decisions with a deadline
 

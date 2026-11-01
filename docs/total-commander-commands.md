@@ -7,8 +7,8 @@ Source: https://www.ghisler.ch/wiki/index.php?title=List_of_internal_commands (r
 **Reading the table.**
 - Default key: a key shown without a mark comes from the wiki description. "(mem)" means not verified against a source. "-" means the page gives none and no other source gives one.
 - PRODUCT.md status: a requirement id (B.. or A..), "missing" (not mentioned), "excluded (...)" or "near" (an id covers part of the need).
-- Decision values: Implement (with its stage), Covered (the same need is met another way, named in Reason), Later (useful, not for the first release), Not (useless here: obsolete, DOS-era, duplicate, replaced by Windows, or out of scope). Every decision was confirmed by the owner on 2026-11-01.
-- Rows in group "Panel side copies" are the cm_Left*/cm_Right*/cm_Trg* copies of active-panel commands. They are Not as duplicates; the feature itself is decided on its cm_Src* or unprefixed row.
+- Decision values: Implement (with its stage), Covered (the same need is met another way, named in Reason), Later (useful, not for the first release), Not (useless here: obsolete, DOS-era, duplicate, replaced by Windows, or out of scope). Every decision was confirmed by the owner on 2026-11-01, except cm_LeftOpenDrives and cm_RightOpenDrives, which the lead changed from Not to Covered the same day to agree with the owner's key map.
+- Rows in group "Panel side copies" are the cm_Left*/cm_Right*/cm_Trg* copies of active-panel commands. They are Not as duplicates; the feature itself is decided on its cm_Src* or unprefixed row. The exceptions are cm_LeftOpenDrives and cm_RightOpenDrives, whose keys Alt+F1 and Alt+F2 the key map keeps.
 - Rulings applied: TC is the interaction reference, not a 1:1 copy; WinUI 3 and Fluent 2 decide controls; Search, Multi-Rename, File operations and Settings are pages; only viewers and editors are other windows; F4 uses an external editor; no Synchronize preview page; FTP is not planned; archives behave like folders through format modules; search reads names from the index only; delete is permanent only, with no Recycle Bin for now.
 
 | Group | Command | TC description (short) | Default key | PRODUCT.md status | Proposed decision | Reason |
@@ -206,8 +206,8 @@ Source: https://www.ghisler.ch/wiki/index.php?title=List_of_internal_commands (r
 | Rename | cm_RenameOnly | Rename files/folders | Shift+F6 | A03 | Implement (Stage 2) | Rename with F2 |
 | Rename | cm_RenameSingleFile | Rename file under cursor | - | A03 | Not | Duplicate of cm_RenameOnly on the focused file |
 | Rename | cm_MultiRenameFiles | Open the Multi-Rename Tool | Ctrl+M (mem) | A12 | Implement (Stage 7) | Multi-Rename page |
-| Archives | cm_PackFiles | Pack files/folders | Alt+F5 (mem) | A09 | Implement (Stage 6) | Create ZIP |
-| Archives | cm_UnpackFiles | Unpack archives | Alt+F9 (mem) | A09 | Implement (Stage 6) | Extract ZIP to a chosen folder |
+| Archives | cm_PackFiles | Pack files/folders | Alt+F5 (mem) | A09 | Implement (Stage 6) | Create ZIP, 7z, TAR or TGZ |
+| Archives | cm_UnpackFiles | Unpack archives | Alt+F9 (mem) | A09 | Implement (Stage 6) | Extract ZIP, TAR, TGZ, 7z or RAR to a chosen folder |
 | Archives | cm_TestArchive | Test integrity of selected archives | - | missing | Later | Test integrity; add with extra archive formats |
 | Archives | cm_ChangeArchiveEncoding | Show popup menu to change the encoding of filenames in an archive | - | missing | Later | File-name encoding in archives; ZIP extraction may need it |
 | Archives | cm_CopyToArchive | Pack files/folders | - | A09 | Not | Duplicate of cm_PackFiles with a preset option |
@@ -259,7 +259,7 @@ Source: https://www.ghisler.ch/wiki/index.php?title=List_of_internal_commands (r
 | Shell actions | cm_ShowRemoteMenu | Context menu for Media Center remote control (Play/Pause) | - | missing | Not | Media Center remote; obsolete |
 | Shell actions | cm_DriveContextMenu | Show drive context menu | - | missing | Later | Shell menu for a drive |
 | Command line | cm_ExecuteDOS | Open command prompt window | - | A01 | Implement (Stage 2) | Open terminal |
-| Command line | cm_ClearCmdLine | Clear the command line | - | A01 | Implement (Stage 2) | Clear or Esc in the command bar |
+| Command line | cm_ClearCmdLine | Clear the command line | - | A01 | Implement (Stage 2) | Esc in the command line clears it and returns to the panel, as in Total Commander (PRODUCT Command line behavior) |
 | Command line | cm_NextCommand | Next command line | - | A01 | Implement (Stage 2) | History recall |
 | Command line | cm_PrevCommand | Previous command line | - | A01 | Implement (Stage 2) | History recall |
 | Command line | cm_AddPathToCmdline | Copy path to command line | - | A01 | Implement (Stage 2) | Insert the panel path |
@@ -394,7 +394,7 @@ Source: https://www.ghisler.ch/wiki/index.php?title=List_of_internal_commands (r
 | Panel side copies | cm_LeftByDateTime | Left panel: Sort by date-time | - | (active-panel command) | Not | Duplicate: fixed left-panel copy of the active-panel command; one command that takes the side is enough |
 | Panel side copies | cm_LeftUnsorted | Left panel: Change sorting to unsorted | - | (active-panel command) | Not | Duplicate: fixed left-panel copy of the active-panel command; one command that takes the side is enough |
 | Panel side copies | cm_LeftNegOrder | Left panel: Reverse sort order | - | (active-panel command) | Not | Duplicate: fixed left-panel copy of the active-panel command; one command that takes the side is enough |
-| Panel side copies | cm_LeftOpenDrives | Left panel: Open drive list or go to drive | Alt+F1 (mem) | (active-panel command) | Not | Duplicate: fixed left-panel copy of the active-panel command; one command that takes the side is enough |
+| Panel side copies | cm_LeftOpenDrives | Left panel: Open drive list or go to drive | Alt+F1 (mem) | (active-panel command) | Covered | Alt+F1 runs cm_SrcOpenDrives for the left panel (ARCHITECTURE key map) |
 | Panel side copies | cm_LeftPathFocus | Focus the path of the left panel | - | (active-panel command) | Not | Duplicate: fixed left-panel copy of the active-panel command; one command that takes the side is enough |
 | Panel side copies | cm_LeftViewModeList | Left panel: Show custom views menu or switch to specified custom view | - | (active-panel command) | Not | Duplicate: fixed left-panel copy of the active-panel command; one command that takes the side is enough |
 | Panel side copies | cm_RightThumbs | Right panel: Thumbnail view | - | (active-panel command) | Not | Duplicate: fixed right-panel copy of the active-panel command; one command that takes the side is enough |
@@ -417,7 +417,7 @@ Source: https://www.ghisler.ch/wiki/index.php?title=List_of_internal_commands (r
 | Panel side copies | cm_RightByDateTime | Right panel: Sort by date-time | - | (active-panel command) | Not | Duplicate: fixed right-panel copy of the active-panel command; one command that takes the side is enough |
 | Panel side copies | cm_RightUnsorted | Right panel: Change sorting to unsorted | - | (active-panel command) | Not | Duplicate: fixed right-panel copy of the active-panel command; one command that takes the side is enough |
 | Panel side copies | cm_RightNegOrder | Right panel: Reverse sort order | - | (active-panel command) | Not | Duplicate: fixed right-panel copy of the active-panel command; one command that takes the side is enough |
-| Panel side copies | cm_RightOpenDrives | Right panel: Open drive list or go to drive | Alt+F2 (mem) | (active-panel command) | Not | Duplicate: fixed right-panel copy of the active-panel command; one command that takes the side is enough |
+| Panel side copies | cm_RightOpenDrives | Right panel: Open drive list or go to drive | Alt+F2 (mem) | (active-panel command) | Covered | Alt+F2 runs cm_SrcOpenDrives for the right panel (ARCHITECTURE key map) |
 | Panel side copies | cm_RightPathFocus | Focus the path of the right panel | - | (active-panel command) | Not | Duplicate: fixed right-panel copy of the active-panel command; one command that takes the side is enough |
 | Panel side copies | cm_RightViewModeList | Right panel: Show custom views menu or switch to specified custom view | - | (active-panel command) | Not | Duplicate: fixed right-panel copy of the active-panel command; one command that takes the side is enough |
 | Panel side copies | cm_TrgCustomView[1-9] | Inactive panel: Activate custom columns view 1-29 | - | (active-panel command) | Not | Duplicate: fixed inactive-panel copy of the active-panel command; one command that takes the side is enough |

@@ -108,7 +108,7 @@ and its own Stop.
 _Avoid_: Process, job, task, transfer
 
 **Transfer**:
-An operation that copies data: Copy, Move, Sync or Mirror.
+An operation that copies data: Copy, a Move to another volume, Sync or Mirror.
 
 **Lane**:
 One of the two queues that operations wait in: transfers, or Deletes. An
@@ -141,8 +141,9 @@ do.
 _Avoid_: Preview, scan
 
 **Taken entry**:
-An entry that an accepted Delete or Move will remove, shown struck through
-until the operation ends.
+An entry that an accepted Delete or Move will remove. It leaves the folder
+panels at once and comes back only if a later listing still finds it. A
+search list shows it struck through until that list's next search.
 
 **Report**:
 What an operation actually did: done, skipped and failed items, and why.

@@ -65,10 +65,10 @@ decisions rather than silently dropping a feature.
 | B13 | Permanent delete | Fast delete, explicit confirmation and scope, Deletes waiting in their own lane, Stop, partial failure reports and clear irreversible behavior |
 | B14 | Synchronization | One-way Sync and Mirror started from the Copy dialog, conflict refusal, a Mirror question with counts before any deletion, verified Mirror deletions and fresh comparison on recovery |
 | B15 | Operation control | Device scheduling with Transfers per device and Deletes per device settings, queue order including placing an operation ahead of a running one, pause/resume, Stop, Cancel all copies and Cancel all deletes, byte/item progress, current file, rates and taskbar progress |
-| B16 | Reports and recovery | Durable accepted work, interrupted-operation Continue/Dismiss, recovery before new submissions, retained reports, skipped/failed/successful distinctions, panel refresh after completion |
+| B16 | Reports and recovery | Durable started work (waiting operations are listed at Exit and not saved), interrupted-operation Continue/Dismiss, recovery before new submissions, retained reports, skipped/failed/successful distinctions, panel refresh after completion |
 | B17 | Text and Hex viewers | Separate windows, large-file random access, bounded reading/cache, encoding detection, wrap/navigation, select-all/copy limits, retry/removal handling and remembered placement |
 | B18 | Export | All matching results to CSV/TSV/TXT, shared query/output semantics, background execution, cancellation and write failures |
-| B19 | Personal settings | Searchable settings pages, individual ordinary commits, atomic transaction dialogs and reset; General, Search, Context menu, Keyboard, File operations and Performance; persistence and shortcut conflict handling |
+| B19 | Personal settings | Searchable settings pages, individual ordinary commits, atomic transaction dialogs and reset; General, Search, Context menu, Keyboard and File operations; persistence and shortcut conflict handling |
 | B20 | Index administration | Drives/service status, diagnostic report, supported repair actions, Include/Visibility settings with proper permissions, creation-date availability and missing/version-mismatched service handling |
 | B21 | Language and help | English, Dutch, Spanish and Turkish coverage, language switching, Windows language fallback, regional formatting, search syntax and accessible messages |
 | B22 | Responsiveness and access | No blocking UI work, bounded large collections, keyboard and pointer access, light/dark/high contrast, DPI scaling, focus restoration and clear errors |
@@ -161,7 +161,8 @@ focus behavior rather than an embedded terminal.
   panel. Compound commands go unchanged to the shell; do not implement a shell
   parser. Define the supported standalone grammar before implementation.
 - Recall retains the current draft. Blank input does nothing; launch failure
-  retains text. Esc returns to the panel without discarding the draft.
+  retains text. Esc clears the command line and returns focus to the panel,
+  as in Total Commander (owner ruling, 2026-11-01).
 - Insert the focused name or full path at the caret. Shell quoting must cover
   metacharacters as well as spaces; insertion must not accidentally execute text.
 - Complete paths asynchronously. A changed draft, folder or tab invalidates old

@@ -1,6 +1,6 @@
 # Copy and Delete wait in separate lanes of one scheduler
 
-Transfers (Copy, Move, Sync, Mirror) and Deletes wait in two lanes of
+Transfers (Copy, a Move to another volume, Sync, Mirror) and Deletes wait in two lanes of
 `Syno.Files`' one scheduler. A Delete never waits for a transfer, and a transfer
 never waits for a Delete; each lane counts its own users of a disk against
 Transfers per device or Deletes per device (owner rulings, 2026-11-01). The
@@ -21,3 +21,7 @@ and never waits.
 lane, so reorder, pause, Stop and Cancel all work for Deletes through the same
 queue code as transfers. gozler-ui is not affected; its Deletes still start at
 once.
+
+A transfer reads its sources when it runs, so a Delete that runs first can
+remove entries a waiting transfer would have copied; the transfer's report
+lists them as not found. The owner accepted this as designed (2026-11-01).

@@ -66,10 +66,28 @@ outcomes.
 **The query parser is a port with checks.** gozlerd's pipe carries a parsed
 query (goz `crates/gozler-core/src/proto/types.rs`), so the client parses.
 `Syno.Index` ports the parser and the binary protocol to C#. Its checks are
-built from goz's query tests and the query help's examples, so drift between
-the two parsers fails a check. Changing gozlerd to parse query text would keep
-one parser, but it needs Rust work, which the owner ruled out (lead decision,
-2026-11-01).
+built from goz's query tests and the query help's examples. Changing gozlerd
+to parse query text would keep one parser, but it needs Rust work, which the
+owner ruled out (lead decision, 2026-11-01).
+
+gozlerd serves only its own protocol version (goz `PROTO_VERSION` in
+`crates/gozler-core/src/proto/types.rs`, DESIGN "The version gate"), and each
+change to a request or a reply raises it by one. gozler and gozlerd install
+together, but SynapseCommander does not, so each such goz change stops search
+here until `Syno.Index` follows it. Folder browsing and file operations keep
+working. gozlerd gives its own version only in the text of its refusal, so
+B20 shows SynapseCommander's protocol version and gozlerd's message.
+
+The installed gozlerd comes from a goz release, not from goz's working tree,
+so `Syno.Index` follows the newest release tag in the goz checkout that the
+build names, as the Settings build names TinyTorrent2 with `ComponentsRoot`.
+`IndexChecks` reads that tag's `PROTO_VERSION` with `git show` and compares
+it with the port's. goz keeps its query cases as Rust tests inside the
+parser's files and as the query help's examples, so the check also records
+the blob hashes of those files at the tag the port follows. A different
+version or hash fails the check, so the first build after a goz release
+shows the difference, and porting it is the next SynapseCommander work (lead
+decision, 2026-11-01).
 
 **Archives are format modules behind one archive interface** (owner ruling,
 2026-11-01; [ADR 0004](adr/0004-archive-format-modules.md)). The interface is
@@ -107,9 +125,15 @@ Their API follows these rules:
 - **Requests have identities and can be cancelled.** A result has an explicit
   release. A cancelled observation does not imply that an accepted filesystem
   change was rolled back.
-- **Close is ordered.** Engine close refuses new work, stops its operations,
-  writes the recovery record and ends its threads, all off the UI thread; the
-  caller waits for the returned task off the UI thread.
+- **Close is ordered and bounded.** The engine saves each running operation's
+  recovery record before the operation changes a file (goz DESIGN
+  "Interrupted operations"), so close never waits to write one. Engine close
+  refuses new work, requests every stop and returns a task that ends when its
+  threads end; the caller waits for it off the UI thread. Exit ends within 10
+  seconds of the person's choice, as in TinyTorrent2 (`docs/contracts/engine/lifetime.md`,
+  "Exit ends within 10 seconds"): at 10 seconds the process ends, whatever
+  still runs. Engine threads are background threads, so a thread stuck in a
+  call to a share that does not answer never keeps the process alive.
 - **Native calls** follow .NET's
   [native interop guidance](https://learn.microsoft.com/en-us/dotnet/standard/native-interop/best-practices):
   `LibraryImport` where suitable, `SafeHandle` for every native handle, and
@@ -127,6 +151,45 @@ These rules keep what those changes established:
   Without a held result, rows of different pages came from different moments
   and the list stopped at 100,000 rows (goz `result-snapshot.md`, `b2bca38`,
   `4f670e2`).
+- **gozlerd keeps at most 2 search result snapshots per user** and drops the
+  one read least recently (goz DESIGN "Result snapshots"). gozler-ui under
+  the same user counts too. So, as in gozler-ui, a search list makes a
+  snapshot only when it reads past its first page, and a new snapshot
+  replaces the list's earlier one. gozlerd has no request that releases a
+  snapshot, so a panel that leaves its search only forgets the snapshot's
+  identity. A list whose snapshot was dropped runs its query again. It keeps the
+  focused entry and the marks by path where they are still in the new result,
+  and it says how many marks it could not keep (lead decision, 2026-11-01).
+- **A location that does not answer stops only its own work** (goz
+  `docs/plans/locations-that-do-not-answer.md`, which is not yet in goz
+  DESIGN.md, so these rules are written out here). A location is the drive
+  or server a path really reaches, through links, `subst` and mapped letters
+  (TinyTorrent2 `docs/contracts/engine/files.md`, "Where a folder really
+  is"); the engine finds it without opening through a link.
+  - Only an operation that moves holds a disk. One whose byte and item
+    counts have not changed for 3 seconds holds none, so the next operation
+    on that disk starts. When it moves again, it finishes its current file
+    and asks for admission before the next one.
+  - When an operation goes still, the engine opens the roots of its source
+    and its destination, each on a thread of its own. A location does not
+    answer while that open has not returned. An error that says the location
+    went away, such as a network name that no longer exists, marks it at
+    once.
+  - Every operation that needs such a location goes to the end of its lane,
+    holds no disk and starts no more files. Its status item names the
+    location, such as "Waiting for \\\\nas\\media". Its report lists what is
+    not done. A hung call's result still decides its own file when Windows
+    returns it.
+  - A file that cannot be read, such as one on a bad sector, fails once and
+    is listed, not tried again.
+  - When the root open returns, or a location that went away answers one of
+    its tries every 30 seconds, its operations resume as Continue does. An
+    operation whose hung call has not returned waits for that call alone,
+    because both would write the same file. One the person paused stays
+    paused.
+  - Exit never waits for a location. An operation that waits for its
+    location after it started is saved at Exit and offered as Interrupted;
+    one that never started changed no file and is not saved.
 - **Paths keep the engine's meaning.** The presentation does not normalize,
   resolve, or rewrite paths, and it does not touch the disk to make a search
   work. Where
@@ -166,7 +229,8 @@ without WinUI ([application areas](#application-areas)). Its
 source layout) and `docs/agents/naming.md` (App folders) are the reference.
 The structure of gozler-ui's window comes from goz `docs/DESIGN.md`: Main
 window, Commander mode's window, The key bar and File transfers. The checked
-revisions are TinyTorrent2 `446b3f2` and goz `e1b5b8b`.
+revisions are TinyTorrent2 `446b3f2` and goz `e1b5b8b`; the queue, result
+snapshot, taken-entry and running-window rules were read at goz `dfd65c0`.
 
 ### Projects
 
@@ -183,7 +247,7 @@ revisions are TinyTorrent2 `446b3f2` and goz `e1b5b8b`.
 | Files | `lib/Files/src` | `Syno.Files`: file operations, the queue, recovery, listings, watching, viewer reads and archives ([engine libraries](#engine-libraries)) | .NET, SharpCompress; Windows through P/Invoke |
 | FilesChecks | `lib/Files/tests` | Checks of `Syno.Files` on real temporary folders, written from goz `docs/DESIGN.md`, and the speed measurements against goz `docs/BENCHMARKS.md` | Files |
 | Index | `lib/Index/src` | `Syno.Index`: the gozlerd client, its query parser and pipe protocol | .NET |
-| IndexChecks | `lib/Index/tests` | Parser and protocol checks built from goz's query tests, with a fake pipe server; no running service | Index |
+| IndexChecks | `lib/Index/tests` | Parser and protocol checks built from goz's query tests, with a fake pipe server; no running service. A comparison with the protocol version and query files of goz's newest release tag ([query parser](#responsibility-map)) | Index |
 
 Settings presentation belongs to `Syno.Settings`, whose
 [contract](../lib/Settings/docs/contract.md) owns declarations, layout and commit
@@ -200,16 +264,23 @@ Glyphs in commit `201577b`. The Settings projects and the solution still name
 Glyphs uses Segoe Fluent Icons, which is also gozler-ui's icon source, so one
 icon per command stays the same in both products.
 
+`ComponentsRoot` names TinyTorrent2's working tree, which can hold another
+session's uncommitted TableView or Glyphs changes. So each stage's completion
+evidence records the TinyTorrent2 commit it built against and whether
+`lib/TableView` and `lib/Glyphs` were clean. A TableView change that this
+product needs counts as done when it is committed in TinyTorrent2.
+
 `SynapseCommander.sln` gains the product project. `Build.ps1` stays the one
 build entry point and gains the product build and launch.
 
-The application pins one Windows App SDK release for itself and its
-installer. Each library references the lowest release it needs, and the
-application's release is at least as high as every library's. Prefer
-TinyTorrent2's release, 2.5.1, so both products share one installed Windows
-App Runtime. Settings references 2.6.4 since `4fd3bfc`, with no recorded
-reason; stage 0 lowers it and a build against 2.5.1 shows whether any newer
-API is needed.
+The application and its libraries use the latest released Windows App SDK
+installed on the development machine (owner ruling, 2026-11-01). The
+project files hold the version number, and no document repeats it, so an
+upgrade on the machine changes only the project files. One release serves
+the application and its installer. A WinUI source checkout, where one
+exists, is for reading: to trace a WinUI bug or to learn how a control is
+meant to be used. It is checked out at the tag of the release the build
+uses (`winui3/release/<version>`), and the build never uses it.
 
 ### Application areas
 
@@ -244,7 +315,7 @@ bounded check in the running application, not a permanent suite.
 | `Operations/` | The presented queue, the File operations page, the status bar items of operations, reports, recovery prompts, the Mirror question, the Multi-Rename page and the drafts of Copy, Move, Delete, New folder, Sync, Mirror and Multi-Rename. |
 | `Viewers/` | Text and Hex viewer windows (stage 5). |
 | `Settings/` | The typed preferences and configured shortcuts, in Presentation, and the `Syno.Settings` catalogue declarations that bind them, in the WinUI application. |
-| `Shared/` | Common dialogs, text formatting and `Work`, the owner of UI background work. `Engine/` holds the engine instance and its delivery. `Desktop/` holds clipboard, drag/drop, shell launch, the notification area, activation, global shortcuts and taskbar progress. `Storage/` holds settings and view-state files. |
+| `Shared/` | Common dialogs, text formatting and `Work`, the owner of UI background work. `Engine/` holds the engine instance and its delivery. `Desktop/` holds clipboard, drag/drop, shell launch, the notification area, activation, global shortcuts and taskbar progress. `Storage/` holds settings and view-state files. `Desktop` keeps one retained thread with an initialized OLE single-threaded apartment for the clipboard, because .NET pool threads are multithreaded and the OLE clipboard refuses them, and reads drop data through an agile reference, as gozler-ui's retained clipboard and drop workers do (goz `win/clipboard/work.rs`, `win/drop_target/work.rs`). `Shared.Work` tracks each such call as a task. |
 
 A type that serves several areas lives in `Shared/`. Feature areas have one
 exception, and it points one way: a panel tab whose location is a search holds
@@ -266,7 +337,7 @@ the Commander page.
 
 ```text
 +----------------------------------------------------------------------+
-| Title bar: [Back] icon, title, menu bar (File Edit View ... Help)    |
+| Caption: [Back] menus (File Edit View ... Help)    [theme] [_][#][X] |
 +----------------------------------+-----------------------------------+
 | Left panel                       | Right panel, or Quick View        |
 |  [tabs, stage 6]                 |                                   |
@@ -287,7 +358,7 @@ page.
 
 | Region | WinUI composition |
 | --- | --- |
-| Title bar | `ExtendsContentIntoTitleBar` with a Back button at the left, then the icon, title and a `MenuBar`. Windows draws the caption buttons. |
+| Title bar | A copy of TinyTorrent2's caption, not WinUI's `TitleBar` control (owner ruling, 2026-11-01; TinyTorrent2 `app/src/Shell/MainWindow.xaml` `Caption` and `MainWindow/Chrome.cs` at `666f861`). The window extends its content into the title bar with the tall height, and a `Grid` in the window's first row is the caption, with inset columns from `AppWindow.TitleBar` and drag rectangles around its controls. It holds the Back button, the menus, and at the right the theme button that switches between Light and Dark, as TinyTorrent2's `SwitchTheme` does, and the Administrator button while elevated. The caption buttons use TinyTorrent2's caption button style. Windows draws the minimize, maximize and close buttons, with transparent backgrounds and the preferred theme set from the window's actual theme, as TinyTorrent2's `UpdateColors` does. TinyTorrent2's page picker and caption search are not copied: there is no page picker, and search is a page. Its language button comes with the second language in stage 5. |
 | Pages | One `Grid` row. Each page is one `UserControl`, created when it first shows and then kept loaded, so returning keeps focus, scroll and selection. A hidden page's owners are inactive ([publication and activity](#publication-and-activity)). |
 | Panel path row | A `DropDownButton` with a `MenuFlyout` for drives and recent folders, and an `AutoSuggestBox` for the editable path and its completion. |
 | Panel listing | `Syno.TableView` `Table`, bound to the active tab's rows. An archive folder uses the same table. |
@@ -308,8 +379,8 @@ Page navigation follows TinyTorrent2's `Shell.Navigation`:
   page clears the history. Commander, then Search, then Settings goes back to
   Search, then to Commander.
 - Back is the title bar's Back button, `Alt+Left` on a secondary page and the
-  mouse back button. The Back button stays in place on every page and is
-  disabled on the Commander page, so the title bar never shifts. On the
+  mouse back button. As in TinyTorrent2, the Back button shows only while the
+  history has an entry to return to, so it is hidden on the Commander page. On the
   Commander page `Alt+Left` is folder history (A04).
 - Every secondary page has a menu item that shows its key, because the menu
   is the one visible list of pages.
@@ -404,7 +475,7 @@ requests. Views keep native controls, focus, scrolling and window lifetime.
 | `Shell.MainWindow` | Chrome, the page views, dialogs, focus movement between regions, splitter mechanics and the order of the Close and Exit steps. |
 | `Shell.MainViewModel` | The shown page, its navigation history and the active list: the active panel's tab on the Commander page, or the results on the Search page. Also the context for command availability, the message bar and the model steps of Close and Exit. |
 | `Shell.WorkStatus` | The status bar. It reads the ordered items of `Shared.Work` and `Operations.State` and owns only how they look. |
-| `Shell.Commands` | The one command table: identity, caption key, icon, default keys, availability and the owner that runs each command. The menu bar, context menus, key bar and keyboard accelerators are built from it. Configured shortcuts replace the default keys. |
+| `Shell.Commands` | The one command table: identity, caption key, the icon's identity (the view maps it to a Glyphs glyph, because Glyphs is a WinUI library), default keys, availability and the owner that runs each command. The menu bar, context menus, key bar and keyboard accelerators are built from it. Configured shortcuts replace the default keys. |
 | `Shell.Inspector` | The inspector's activity, observation of the active list's accepted selection, subject, displayed content and the lifetime of its reads, under the rules of [publication and activity](#publication-and-activity). |
 | `Panels.Commander` | Both `Panel`s, the active side and Swap (A10). The other panel's folder is the default destination for Copy and Move. |
 | `Panels.Panel` | One side: its ordered tabs and the active tab. It has one tab until stage 6. |
@@ -439,12 +510,69 @@ record.
   admits the same user at medium integrity, so a normal start reaches an
   elevated process. Windows App SDK `AppInstance` redirection across
   integrity levels is not verified; use it only if a check proves it.
+- **A process without a window still holds the data folder** while it starts
+  or while Exit ends it. When the person has confirmed Exit, which also
+  starts the 10-second bound, the process closes its request pipe first, so
+  a second launch never hands its request to a process that is ending. A
+  person who chooses to stay open keeps the pipe. A second launch waits up
+  to 10 seconds for it, off any UI thread: it hands its request to the window that appears, or it
+  becomes the first process when the data folder is free, so a start just
+  after Exit still shows a window (goz DESIGN "Running windows"). After 10
+  seconds it says that the earlier SynapseCommander has not ended yet.
 - **An elevated start that finds a normal process** sends it the request and
   Exit. The running process runs its normal Exit, including the operations
   question. If the person keeps the operations, or a dialog is open, the
   running window comes forward and the elevated start ends. Otherwise the
   elevated start waits off the UI thread for the old process to end, then
   takes the data folder.
+- **Elevation is for the whole window** (owner ruling, 2026-11-01; Total
+  Commander elevates only the one operation). When Windows refuses an action
+  with access denied, the action asks at that point, as Total Commander does
+  at the refused file. An operation waits at the refused file and keeps its
+  recovery record. The question offers "Restart as administrator" in place
+  of Total Commander's "As Administrator", beside Total Commander's other
+  answers. A standard account gets the offer too, as in Total Commander
+  (owner ruling, 2026-11-01): Windows asks for an administrator's password,
+  and the new process runs as that administrator, with that account's data
+  folder. So the start request carries the refused operation's recovery
+  record itself, not a reference to the first account's data folder, and the
+  new process saves it in its own. The first account's other saved
+  operations stay in its own data folder and are offered at its next start.
+  The Administrator button starts the normal process with the signed-in
+  person's token, so it returns to the first account.
+- **The window stays elevated until the person returns it.** While elevated,
+  the title bar shows an Administrator button, and the File menu has the
+  same command. It restarts SynapseCommander as a normal process. An
+  elevated process starts a normal one with the person's normal token, such
+  as the shell's; stage 5 checks the method. While elevated, Windows blocks
+  drops from programs that are not elevated, such as File Explorer.
+- **A restart in either direction is one owner's sequence** (lead decision,
+  2026-11-01):
+  1. The running process asks the operations question of Exit; a person who
+     stays open cancels the restart.
+  2. With its pipe still open, it starts the new process, which shows the
+     Windows elevation prompt. The start request says "take over", so the new
+     process never hands its request back; it carries the panels' folders
+     and tabs, the running process's id, and the refused action, with a
+     refused operation's recovery record. If the person declines the prompt
+     or the start fails, the restart is cancelled: the window stays as it
+     was, its operations are untouched, and the refused file's question
+     shows again.
+  3. Only when the new process has started does the running process stop its
+     operations, close its pipe, save its view state and end, within the
+     10-second bound that starts then. The hand-over moves the refused
+     operation's recovery record: the running process removes it from its
+     own saved operations and does not save it at Exit, so only the new
+     process can continue it.
+  4. The new process waits for the running process, by its id, to end, with
+     a bound longer than that process's 10 seconds, so it never gives up
+     before a forced end. Then it takes the data folder and opens on those
+     folders. As part of recovery, before any new
+     request, it continues the refused operation from its recovery record at
+     the refused file, as Continue does, and opens a refused folder again.
+     An action that had changed nothing runs again from its captured request
+     as part of that recovery. Other saved operations are offered as
+     Interrupted, as after any Exit.
 - **A viewer window** holds only `Viewers.Viewer`. Closing it ends its
   deliveries and reads; it never keeps the process alive.
 
@@ -477,7 +605,8 @@ lower level already owns, and says which owner has it (B19).
 Microsoft's [keyboard interactions](https://learn.microsoft.com/en-us/windows/apps/develop/input/keyboard-interactions)
 guidance). It closes the open dialog, menu or popup, and a dialog waiting
 behind it then shows. A text editor keeps its own Esc; on the Search page Esc
-clears the search box. Esc never navigates back, never stops an operation and
+clears the search box, and in the command line Esc clears it and returns
+focus to the panel, as in Total Commander. Esc never navigates back, never stops an operation and
 never asks whether to stop one.
 
 One key map serves every page (owner decision, 2026-11-01). Total Commander's
@@ -512,7 +641,7 @@ key is kept unless the table says otherwise.
 | Insert, Space, Num+, Num−, Num* | Mark, mark, select mask, unselect mask, invert (A11) | Mark | — |
 | Alt+Enter | Properties | Properties | — |
 | Tab | Other panel | Next control | Next control |
-| Esc | Closes quick search or the quick filter | Clears the search box | Closes temporary UI only |
+| Esc | Closes quick search or the quick filter; in the command line, clears it and returns to the panel | Clears the search box | Closes temporary UI only |
 
 The File operations page has no default key, as in Total Commander; the
 status bar's operations button and the menu open it. FTP is not planned, so
@@ -585,7 +714,7 @@ because XAML owns rendering.
 | **After every `await`, and in every handler of an event that our own set raised, check that the result still belongs to the current request** (its generation or owner identity) before applying it. | A control set dispatched a newer update before the outer one resumed, so old effects undid newer state. |
 | **Before the focused element is hidden or disabled, its owner moves focus on purpose.** | Windows drops the focus of a control that it disables, so the plan had to order structure changes, refresh and focus. |
 | **A dialog started by an engine event or a reply waits behind the open dialog,** through the one dialog entry point. | Dialogs that replies opened ran before older replies were applied (window rule 13). WinUI also throws when a second `ContentDialog` opens. |
-| **Exit hides the window, stops deliveries, requests cancellation and lets essential writes finish off the UI thread.** | Exit joined threads that waited for a dead share or a permission prompt. |
+| **Exit hides the window, stops deliveries, requests cancellation and lets essential writes finish off the UI thread, within the 10-second bound of [engine libraries](#engine-libraries).** | Exit joined threads that waited for a dead share or a permission prompt. |
 | **A page, a Settings section or a viewer window is created when it first shows.** | Opening Settings took 325 ms and the main window 627 ms before first show, until `32cfeb4` created pages and the File operations window on first use. |
 | **Page and pane state is model state.** The shown page, the navigation history, Quick View and the Search inspector pane's open state and height live in `Shell.MainViewModel`, not in a control. | TinyTorrent2's Search page kept its own splitter, height and maximized state, and the maximized state lived in the `Pane` control (`15-workspace-shell-study.md`, `43ae7bc`). |
 
@@ -618,6 +747,13 @@ TinyTorrent2 in `11be2e8`. These rules follow from those changes.
   is released when the first complete listing after the operation's end is
   applied. TinyTorrent2's `deleted` flag had 44 reads in 12 files, and one
   reader forgot it (`14-removed-torrents-plan.md`).
+- **A search list shows a taken entry struck through at once** and keeps
+  gozlerd's count and positions, because gozlerd renumbers its results when
+  it applies the change. Each search list keeps the ended operations it shows
+  and releases them at its own next search, or when a panel leaves its
+  search, so one list's search never shows another list's deleted files as
+  present again (goz DESIGN "The person never waits for the disk"). Marks
+  leave taken entries out.
 - **One owner decides the operation's presentation lifecycle,** in
   `Operations`. A person's acknowledgement of a report never delays the
   release of taken entries or the panel's re-read. gozler-ui had released
@@ -633,21 +769,43 @@ TinyTorrent2 in `11be2e8`. These rules follow from those changes.
 The scheduling rules are the engine's; these owner rulings of 2026-11-01 say
 what it must do ([ADR 0003](adr/0003-copy-and-delete-lanes.md)):
 
-- **Two lanes, one scheduler.** Transfers (Copy, Move, Sync, Mirror) and
+- **Two lanes, one scheduler.** Transfers (Copy, a Move to another volume, Sync, Mirror) and
   Deletes wait in separate lanes. A Delete never waits for a transfer and a
   transfer never waits for a Delete. Each lane counts its own users of each
   disk, against Transfers per device or Deletes per device: the person's
   settings, from 1 to 3, default 1. In goz a Delete takes no disk and never
   waits (`prepare.rs`); here the Delete lane is part of the engine from the
-  start. New folder never waits.
+  start.
+- **New folder, Rename and a same-volume Move take no disk and never wait.**
+  F2, Shift+F6 and F6 with a new name in the same folder rename at once
+  (A03). A Move within one volume renames its entries, so it also starts at
+  once, with its own status item and Stop. goz admits a rename and a
+  same-volume move like a transfer, so at the default of 1 transfer per device
+  an F2 would wait behind a running copy (lead decision, 2026-11-01).
+- **The lanes do not order one against the other** (owner ruling,
+  2026-11-01). A Copy, Sync or Mirror reads its sources when it runs (goz
+  D11), so a Delete that runs first removes entries a waiting transfer would
+  have read, and that transfer's report lists them as not found. This is the
+  designed behavior. A Rename or a same-volume Move of such an entry follows
+  the same rule (lead decision from that ruling, 2026-11-01).
 - **The person orders the queue; the engine decides the threads.** Moving a
   waiting operation ahead of a running one in the same lane on the same disk
   starts it and pauses the running one, which resumes, with its progress, when
-  its turn comes. A running operation can also be moved down. Work on other
-  disks is not affected, and an operation the person paused stays paused. goz
+  its turn comes. An operation yields only to an operation ahead of it that
+  can start on its disk now, so moving a running operation down is the same
+  request as moving the one below it ahead, and an operation that waits for
+  another disk takes nothing. Work on other disks is not affected. goz
   `Queue::move_waiting` is the reference for waiting transfers; here Deletes
   and a running operation move the same way. SynapseCommander always uses the
   engine's automatic speed values and shows no speed presets.
+- **goz DESIGN "Device admission" gives the remaining queue rules, in both
+  lanes.** A lowered limit lets running operations drain. Ready work is
+  scanned in queue order, and blocked work reserves no disk. Pause releases an
+  operation's disks only after it is quiet, and Resume asks for admission
+  again. A yielded operation returns by itself when the work ahead ends; one
+  the person paused stays paused. Nested moves keep their return order. A
+  cancelled waiting operation takes its disks again before it removes its
+  unfinished output.
 - **Stop keeps finished work.** Each operation's status bar item has its own
   Stop. The report says how far the operation got, such as "Stopped: 37 of
   120 copied". Stop asks nothing.
@@ -663,9 +821,40 @@ what it must do ([ADR 0003](adr/0003-copy-and-delete-lanes.md)):
     comparison as a Sync.
 
   A Mirror with nothing to delete never asks. The engine's per-file checks
-  before each deletion still run after the answer. The comparison's summary
+  before each deletion still run after the answer, so a destination that
+  changed meanwhile loses nothing it should keep. The comparison's summary
   carries the file count, the folder count and the bytes to delete; goz's
   `ComparisonSummary` counts files and folders together and has no bytes.
+
+  A Mirror that waits for its answer has changed no file. Stop and Cancel all
+  copies end it and withdraw its question, whether the question is open or
+  waits behind another dialog. An answer that arrives after the Mirror ended
+  is refused and does nothing. At Exit it is a waiting operation.
+- **An operation is saved at Exit when it has a recovery record,** that is,
+  once it has started to change files, whatever its mode: running, yielded,
+  paused, or waiting for its location. These are offered as Interrupted at
+  the next start (B16). An operation that has changed no file, such as one
+  that waits for its turn or for the Mirror answer, or one paused before it
+  started, is not saved, as in goz DESIGN "Interrupted operations"; the Exit
+  question lists it as not going to run.
+- **One state type holds each operation's mode.** In `Syno.Files` an
+  operation is Preparing, Waiting, Running, Yielded, WaitingForAnswer,
+  Stopping, Ended or Interrupted (after a restart, until Continue or
+  Dismiss). The person's pause, a wait for a location that does not answer
+  and the existence of a recovery record are separate facts. One function
+  changes the mode. `FilesChecks` runs sequences of the events above (Stop,
+  Cancel all, pause, resume, a move up or down, a limit change, a Mirror
+  answer, a location that stops and starts answering, Exit, Continue,
+  Dismiss, a new request during recovery) and checks after each step: no
+  lane runs more moving operations on a disk than its limit, except while a
+  lowered limit drains or while an operation that moved again finishes its
+  current file; a person's pause survives every event except Stop and Cancel
+  all; a
+  Mirror deletes nothing before its answer; Exit saves exactly the operations
+  with a recovery record, except one handed to a restarted process; one
+  recovery record is held by one process only; no new request runs before
+  recovery ends; every
+  ended operation has a report.
 - **An action that outlives its dialog belongs to an owner that outlives the
   dialog,** and it ends in a typed outcome: done, cancelled, refused, or failed
   with a reason. gozler-ui's service fixes ran and were forgotten, so a
@@ -718,13 +907,15 @@ Closing behavior is explicit:
 - Hiding to the notification area, when enabled, keeps the same application
   process and engine running.
 - Actual Exit during work offers to remain open or stop safely and exit.
-  Engine work cannot continue after process termination.
+  Engine work cannot continue after process termination. Exit ends within 10
+  seconds ([engine libraries](#engine-libraries)).
 - Shutdown rejects new requests, invalidates UI deliveries, requests engine
   cancellation and completes required persistence off the UI thread. Preserve
   the engine's guarantees about unfinished outputs and interrupted work.
 - Dispose delivery subscriptions before releasing their targets. Release
   every native handle through its `SafeHandle` after the engine thread that
-  uses it has ended. Finalizers are a fallback, not a blocking shutdown path.
+  uses it has ended, or leave it to the process end at the 10-second bound.
+  Finalizers are a fallback, not a blocking shutdown path.
 - Session end and process crashes may interrupt writes; atomic recovery state
   and truthful next-start reporting matter more than promising completion.
 

@@ -28,5 +28,6 @@ engine fixes. goz's `docs/DESIGN.md`, `docs/research` and `docs/BENCHMARKS.md`
 become this product's specification and reference. The goz engine was written
 by AI agents after that research, and its tests have not been reviewed, so
 SynapseCommander writes its own tests from the specification. gozlerd's query
-parser is ported to C#, with checks built from goz's query tests so that drift
-between the two parsers fails a check.
+parser is ported to C#, with checks built from goz's query tests and a check
+that compares the port with goz's latest release (ARCHITECTURE "Responsibility
+map").
