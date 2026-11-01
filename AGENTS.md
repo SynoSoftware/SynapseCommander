@@ -60,7 +60,8 @@ installed goz service as part of development.
   pending deliveries without losing accepted operations.
 - Validate untrusted disk, archive and native inputs with checked lengths and
   bounded allocations. Keep P/Invoke and `unsafe` code small and inside the
-  engine library that owns it. Preserve the integrity rules of goz
+  engine library that owns it, or in `Shared.Desktop` for shell and OLE calls
+  that WinUI does not wrap. Preserve the integrity rules of goz
   `docs/DESIGN.md` that the engine implements.
 - Make the smallest coherent change that solves the whole task. Remove the
   superseded path and orphans created by the change. Preserve unrelated work.

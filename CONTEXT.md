@@ -145,6 +145,16 @@ An entry that an accepted Delete or Move will remove. It leaves the folder
 panels at once and comes back only if a later listing still finds it. A
 search list shows it struck through until that list's next search.
 
+**Question list**:
+The one list of the questions that operations have for the person, such as
+the Mirror question or an access denied. A question never stops other work.
+_Avoid_: Prompt queue, dialog
+
+**Location**:
+The drive or the server that a path's work really reaches, through links,
+`subst` letters and mapped letters.
+_Avoid_: Drive, root (when a link leads elsewhere)
+
 **Report**:
 What an operation actually did: done, skipped and failed items, and why.
 _Avoid_: Log, result

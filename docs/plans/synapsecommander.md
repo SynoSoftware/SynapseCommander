@@ -45,6 +45,13 @@ behavior, so no stage stops for the answer. The owner rulings recorded in
 these documents, such as F2 for Rename, Ctrl+L for the path box, the pages
 and the permanent Delete, are approved departures. Controls and visuals
 follow WinUI 3 and Fluent 2 and are not departures from Total Commander.
+Total Commander's window waits on a share or a slow folder; SynapseCommander's
+never does, because the window never blocks (owner ruling, 2026-11-01). That
+is an approved departure wherever Total Commander waits. Total Commander's
+copy also stops at each question; in SynapseCommander nothing waits for the
+person (owner ruling, 2026-11-01): questions go into a list, and every task
+that can be done is done meanwhile, as
+[Operations in the window](../ARCHITECTURE.md#operations-in-the-window) says.
 
 **Owner ruling, 2026-11-01: every piece of UI is prototyped first and
 approved by the owner.** Each window, page, dialog, pane, flyout, menu, bar
@@ -66,21 +73,23 @@ ask. Each reason is in the linked section.
 | --- | --- | --- |
 | 2026-11-01 | Everything that came from Rust moves to C#: operations, queue, recovery, listings, watching, viewer reads, archives and the search client | [Process and source ownership](../ARCHITECTURE.md#process-and-source-ownership) |
 | 2026-11-01 | goz `DESIGN.md`, `docs/research` and `BENCHMARKS.md` are the specification; the Rust code is only a reference, and tests are written fresh | [Process and source ownership](../ARCHITECTURE.md#process-and-source-ownership) |
-| 2026-11-01 | Two engine libraries, `lib/Files` and `lib/Index`, each with its own checks; all P/Invoke inside them | [Projects](../ARCHITECTURE.md#projects) |
+| 2026-11-01 | Two engine libraries, `lib/Files` and `lib/Index`, each with its own checks; all P/Invoke inside them, except the shell and OLE calls in `Shared.Desktop` | [Projects](../ARCHITECTURE.md#projects) |
 | 2026-11-01 | The query parser and pipe protocol are ported to C#, with checks built from goz's query tests | [Responsibility map](../ARCHITECTURE.md#responsibility-map) |
 | 2026-11-01 | Copy and delete are built and measured first; the measurement chooses the methods | Stage 1 |
 | 2026-11-01 | Recovery records use SynapseCommander's own format | [Lifetime, persistence and recovery](../ARCHITECTURE.md#lifetime-persistence-and-recovery) |
 | 2026-11-01 | Archives: .NET for ZIP, TAR and TGZ; SharpCompress for 7z and RAR reading; 7z creation by SharpCompress or `7z.dll`, checked in stage 6 | [Responsibility map](../ARCHITECTURE.md#responsibility-map) |
 | 2026-11-01 | `IndexChecks` compares the port with goz's protocol version and query files, because gozlerd serves one version | [Responsibility map](../ARCHITECTURE.md#responsibility-map) |
 | 2026-11-01 | A search list that lost its gozlerd snapshot searches again and keeps the focus and marks by path | [Engine libraries](../ARCHITECTURE.md#engine-libraries) |
-| 2026-11-01 | Rename, New folder and a same-volume Move take no disk and never wait; a Rename or Move of a waiting transfer's source follows the owner's ruling on Delete | [Operations in the window](../ARCHITECTURE.md#operations-in-the-window) |
+| 2026-11-01 | Rename, New folder and a same-volume Move take no disk and never wait; a Rename or same-volume Move of an entry that a transfer still uses runs at once, as in Total Commander, and the transfer's report lists the entry as not found | [Operations in the window](../ARCHITECTURE.md#operations-in-the-window) |
 | 2026-11-01 | An operation is saved at Exit when it has a recovery record; PRODUCT B16 reads "Durable started work" | [Operations in the window](../ARCHITECTURE.md#operations-in-the-window) |
 | 2026-11-01 | The goz checkout's newest release tag, not its working tree, is the version `Syno.Index` follows | [Responsibility map](../ARCHITECTURE.md#responsibility-map) |
 | 2026-11-01 | `cm_LeftOpenDrives` and `cm_RightOpenDrives` are Covered by Alt+F1 and Alt+F2, to agree with the owner's key map | [Command list](../total-commander-commands.md) |
 | 2026-11-01 | goz's admission rules apply to both lanes; one state type and a sequence check hold the queue's rules | [Operations in the window](../ARCHITECTURE.md#operations-in-the-window) |
 | 2026-11-01 | Exit ends within 10 seconds; a second launch waits up to 10 seconds for a process without a window | [Engine libraries](../ARCHITECTURE.md#engine-libraries), [One process, one main window](../ARCHITECTURE.md#one-process-one-main-window) |
 | 2026-11-01 | Copy methods are measured for SSD to SSD on this machine; other drive pairs use goz's Automatic values until measured | Stage 1 |
-| 2026-11-01 | A restart in either direction starts the new process before the running one stops anything; the new process continues the refused operation at its refused file during recovery | [One process, one main window](../ARCHITECTURE.md#one-process-one-main-window) |
+| 2026-11-01 | A restart in either direction starts the new process before the running one stops anything; the new process continues the refused operation, with its refused entries, during recovery | [One process, one main window](../ARCHITECTURE.md#one-process-one-main-window) |
+| 2026-11-01 | A Move across volumes flushes each copied file before it deletes the source | [Lifetime, persistence and recovery](../ARCHITECTURE.md#lifetime-persistence-and-recovery) |
+| 2026-11-01 | A recovery record names each end's volume; Continue never writes to another volume that took the letter | [Engine libraries](../ARCHITECTURE.md#engine-libraries) |
 
 ## Lessons from earlier plans
 
@@ -103,9 +112,11 @@ the window never blocks, are not weakened by any lesson.
 | --- | --- | --- |
 | TinyTorrent2 `14-inspector-plan.md` (`c1d54c9`), fixed in `6c6f57b` | Done | [Publication and activity](../ARCHITECTURE.md#publication-and-activity) |
 | goz `window-architecture.md` (`a2daf14` to `c698a56`) and `ui-architecture-fixes.md` | Done | [Window rules](../ARCHITECTURE.md#window-rules) |
+| goz `window-responsiveness.md` rank 7 (issue #87, `89891df`) and DESIGN "Dragging" (`b974bcb`, `c90aa4d`) | Done | [Drag and drop](../ARCHITECTURE.md#drag-and-drop) |
 | TinyTorrent2 `15-workspace-shell-study.md`, `14-removed-torrents-plan.md`, `tableview-performance-plan.md`, `communication-plan.md`, `library-cache-plan.md`, `payload-move-plan.md`; the restructuring commits `1faab3f` and `7eb19cc` | Done | [Window rules](../ARCHITECTURE.md#window-rules), [Operations in the window](../ARCHITECTURE.md#operations-in-the-window), [Tables](../ARCHITECTURE.md#tables), [Engine libraries](../ARCHITECTURE.md#engine-libraries) |
 | goz `window-responsiveness.md`, `locations-that-do-not-answer.md`, `maintainability.md`, `result-snapshot.md`, `paths-through-links.md`, `copy-behaviour.md`, `service-repair.md`, `file-manager-spec.md`; the commits `3b307e5`, `0ed6c44`, `d52b4ff` | Done | The same sections, and `Shared.Storage` in [Presentation owners](../ARCHITECTURE.md#presentation-owners) |
 | goz `locations-that-do-not-answer.md` (a plan, not yet in DESIGN.md); TinyTorrent2 `torrent-control-plan.md` and `drive-work-plan.md`, through their results in `docs/contracts/engine/lifetime.md` ("Exit ends within 10 seconds") and `files.md` ("Where a folder really is"); goz DESIGN "Result snapshots" and "Running windows" | Done | [Engine libraries](../ARCHITECTURE.md#engine-libraries), [One process, one main window](../ARCHITECTURE.md#one-process-one-main-window) |
+| TinyTorrent2's work on lost and hung shares: `docs/contracts/engine/files.md` ("Unfinished tasks", "Drive turns", "Where a folder really is", "Unfinished files"), `engine.md` (storage recovery), `engine/notifications.md`, `engine/lifetime.md`, `library/files.md`, `13-disk-discovery-plan.md`, `app/src/Shared/Desktop/DiskSpace.cs`, the `Checks.ps1` checks `AbsentLink`, `LinkedNotice`, `StoppedLocation` and `MoveRecovery`; the retired plans `drive-work-plan.md`, `payload-move-plan.md`, `torrent-control-plan.md`, `torrent-control-audit.md` and `14-removed-torrents-plan.md`; the commits `a484e66`, `b6c300c`, `78eb5b3`, `311da9a`, `235594a`, `9027e74`, `05b67fe`, `12b99cf`, `d8c33be`, `42b90c7`, `afd814e`, `04d1559`, `0d6e588`, `b033d3d` | Done. Their copy and delete methods are already in goz DESIGN. The new lessons: a missing entry is missing only while its location answers; a link that cannot be followed does not answer; one open per location at a time; work goes on around a location that does not answer; a resume never loops; a recovery record names volumes; one failed step never drops other work; a Move flushes before it deletes a source | [Engine libraries](../ARCHITECTURE.md#engine-libraries), [Operations in the window](../ARCHITECTURE.md#operations-in-the-window), [Lifetime, persistence and recovery](../ARCHITECTURE.md#lifetime-persistence-and-recovery) |
 | goz `copy-behaviour.md` and its earlier form `copy-policies.md` (retired in `8ec9f8c`) | Done: DESIGN "Device admission", "Interrupted operations" and "Synchronize folders" hold their rules, which [Operations in the window](../ARCHITECTURE.md#operations-in-the-window) adopts | |
 | TinyTorrent2's torrent-control audit, `peer-map-plan.md`, `subtitles-records-plan.md`, the indexing and crawl research; goz `faster-start.md` (retired in `cce0398`), `sorted-index.md` (`7b4cdc0`), `visibility-plan.md`, `service-settings.md`, the early `ui-*.md` plans, `window-painting.md` | Done: no new lesson. Their lessons are gozlerd's own, specific to the torrent domain or to Win32 painting, or already recorded above. | |
 
@@ -248,7 +259,20 @@ copy removes only its own unfinished file, an interrupted copy resumes inside
 the file, and a running Delete stops between items and keeps what it already
 deleted. The queue's sequence check passes. With a thread held in a call that
 does not return, engine close lets the process end at 10 seconds. No engine
-host or service is installed or spawned.
+host or service is installed or spawned. The flush that a Move makes before it
+deletes a source is measured on goz's 30,000 small files and recorded.
+
+`FilesChecks` also make a location go away without administrator rights, as
+TinyTorrent2's `AbsentLink` and `MoveRecovery` checks do: a `subst` letter
+removed during the work, a junction to that letter, and
+`\\127.0.0.1\<a share that does not exist>`. They show that a Delete, Move
+or Copy of entries there treats nothing as missing and loses nothing,
+that the operation's entries on other locations finish, that other
+operations run, and that the entries resume once the letter returns. A
+location that hangs cannot be made on demand, so that case is in the After
+install list: a share made to hang during a copy from C: to D: that also
+reads from it, a Delete and a Mirror, while another operation runs on other
+disks.
 
 ## Stage 2: folder workflow and command line
 
@@ -272,7 +296,30 @@ commands that each stage implements.
    routing mutations through the stage 1 engine. One bounded check shows
    whether WinRT `Clipboard` works from `Shared.Desktop`'s apartment thread;
    if it does not, that thread uses the OLE clipboard calls. Record the
-   result here.
+   result here. Build drag and drop as
+   [drag and drop](../ARCHITECTURE.md#drag-and-drop) says. Before that,
+   record here, from Total Commander's help, its drag behavior: the drop
+   targets and effects, their modifier keys and defaults, the menu of a
+   right-button drag, whether a drop between panels opens the Copy or Move
+   dialog, a drop onto a file row, and what a drag that starts on an
+   unmarked entry carries while other entries are marked. A difference
+   between that record and the rules in ARCHITECTURE needs the owner's
+   approval. Bounded checks settle what reading cannot, and each records
+   its result here:
+   - Whether a WinUI window can start `SHDoDragDrop` from TableView's drag
+     gesture, with either mouse button, and whether a larger drag's data
+     object, built off the UI thread, can be used by that drag.
+   - Whether WinUI's drop events can report an optimized move, hold a drop
+     until its operation ends, and reach the source's asynchronous
+     capability. Explorer must keep its files when a queued move is dropped,
+     and 7-Zip's dropped files must be copied. Where WinUI cannot, the
+     shell's OLE drop target in `Shared.Desktop` takes the drop, and the
+     check also settles how that target holds a drop while the window keeps
+     running, because WinUI has no supported nested message loop. A held
+     drop ends at Exit.
+   - Whether reading an incoming drop's data from a slow source blocks the
+     UI thread. If it does, that read moves to `Shared.Desktop`'s apartment
+     thread through the OLE data object.
 5. Build the editable command line using PRODUCT.md's rules. Add terminal
    launch, recall/draft, name/path insertion and cancellable path completion.
 6. Fill the key bar and apply the
@@ -280,7 +327,10 @@ commands that each stage implements.
 
 **Proof:** slow or unreachable folders leave the other panel and window usable;
 stale listings/completions do not replace newer state. Clipboard/drop actions
-target the captured entries and pointer destination. A command launched in a
+target the captured entries and pointer destination. Dragging 10,000 marked
+entries to File Explorer, and dropping them back on the other panel, leave
+the Debug stall detector with no record, and the drop effect follows Total
+Commander while the pointer moves. A command launched in a
 folder containing spaces receives that folder; standalone cd navigates; compound
 commands retain shell behavior. Check shell metacharacters, focus routing and
 failed launches. Use temporary folders for destructive checks.
@@ -301,7 +351,7 @@ are in [Operations in the window](../ARCHITECTURE.md#operations-in-the-window).
    button and its menu, and the taskbar progress. Build the File operations
    page with the transfer and Delete lists, reorder including ahead of a
    running operation, pause/resume, Stop, Cancel all copies and Cancel all
-   deletes.
+   deletes. Add the question list and the quiet notification that opens it.
 4. Present structured partial outcomes and retained reports, including how far
    a stopped operation got. Coordinate panel refresh and taken entries from
    accepted engine results.
@@ -317,8 +367,11 @@ proves it:
 | --- | --- |
 | Existing-file policies and conflicts, from goz `DESIGN.md` "File operations" | Each policy on a prepared destination gives the documented result; two selected entries never overwrite each other |
 | Sync and Mirror comparison, from goz "Synchronize folders" and decision D13 | Mirror deletes only unchanged destination-only entries, after every required copy succeeded and each entry is checked again |
-| A direct Mirror with deletions waits after its comparison; the summary has file count, folder count and bytes; the commit can finish as a Sync | Nothing is copied before the answer; Keep them deletes nothing; Stop while it waits withdraws the question, and a late answer does nothing |
-| The two-lane queue from stage 1 under real operations | A Delete waits for a Delete on its disk, never for a copy; moving an operation ahead of a running one pauses the displaced one, which resumes with its progress; Cancel all deletes leaves transfers running |
+| A direct Mirror with deletions asks through the question list and copies meanwhile; the summary has file count, folder count and bytes; Keep them ends it as a Sync | Nothing is deleted before Delete them; the copies run while the question waits; Keep them deletes nothing; Stop withdraws the question, and a late answer does nothing |
+| A Sync's or Mirror's source or destination goes away during the comparison or the run, made as in stage 1 with a removed `subst` letter | Nothing is read as missing: Mirror deletes nothing that the source still holds, and Sync copies nothing twice; the entries resume once the letter returns |
+| Questions never stop work: an access denied or another entry's question goes into the question list | The operation's other entries and the other operations finish while the question waits; answering runs only the answered entries; an entry that fails again without progress goes to the list instead of resuming again |
+| A Delete of entries that a transfer still uses: the one Delete question adds the note and a Queue button, as the default, to the left of Delete and Cancel, which are aligned right and keep their places | With Queue, the shared part of the tree stays until the transfer ends and everything else is deleted at once; after the transfer, the entries it writes are deleted, and of the entries it reads only those it finished; a failed, stopped or dismissed transfer leaves its unread entries on disk; with Delete, the transfer's report lists the deleted entries as not found |
+| The two-lane queue from stage 1 under real operations | A Delete waits for a Delete on its disk, never for a copy's disk; moving an operation ahead of a running one pauses the displaced one, which resumes with its progress; Cancel all deletes leaves transfers running |
 | Comparison marks for A21 | New and newer entries on each side are marked; equal entries are not |
 
 **Proof:** UI actions follow authoritative engine states across preparation,
@@ -469,6 +522,7 @@ not listed here.
 | Shell launch: Open, Open with, Explorer, Properties, the terminal, the external editor | The shell resolves the path and starts a process | `Shared.Desktop` through `Shared.Work` | 2 |
 | Clipboard read and write | Another program holds the clipboard | `Shared.Desktop` on its OLE apartment thread, tracked by `Shared.Work` | 2 |
 | Drop data read | The source program answers slowly | `Shared.Desktop` through an agile reference, tracked by `Shared.Work` | 2 |
+| Naming dragged entries with `SHParseDisplayName` | The shell names each entry; with the row's find data it reads no disk, about 10 µs per entry | `Shared.Desktop`, inline up to the shared size, else through `Shared.Work` ([drag and drop](../ARCHITECTURE.md#drag-and-drop)) | 2 |
 
 ## Open decisions with a deadline
 

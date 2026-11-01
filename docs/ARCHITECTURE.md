@@ -58,6 +58,9 @@ document wins.
 
 The engine libraries have no WinUI and no presentation code. All P/Invoke and
 `unsafe` code is inside them, each declaration beside the owner that uses it.
+The one other place is `Shared.Desktop`, for the shell and OLE calls that
+WinUI does not wrap, such as the shell's drag and the OLE clipboard (lead
+decision, 2026-11-01).
 Batch-rename masks and checksum algorithms also belong to `Syno.Files` as their
 features land; a preview and its rename call the same function. External
 tools retain their own implementation. The UI gathers intent and presents
@@ -125,6 +128,12 @@ Their API follows these rules:
 - **Requests have identities and can be cancelled.** A result has an explicit
   release. A cancelled observation does not imply that an accepted filesystem
   change was rolled back.
+- **One failed step never drops other work.** A worker completion, a
+  delivery or one operation's step that throws is logged and ends only that
+  step; its owner records a failed outcome for it, so none of its state stays
+  in progress, and the rest of its batch runs. In TinyTorrent2 one throw ended the
+  engine without its Exit save and left probes and queries stuck
+  (`torrent-control-audit.md` C2, fixed in `b6c300c`).
 - **Close is ordered and bounded.** The engine saves each running operation's
   recovery record before the operation changes a file (goz DESIGN
   "Interrupted operations"), so close never waits to write one. Engine close
@@ -174,19 +183,74 @@ These rules keep what those changes established:
     and its destination, each on a thread of its own. A location does not
     answer while that open has not returned. An error that says the location
     went away, such as a network name that no longer exists, marks it at
-    once.
-  - Every operation that needs such a location goes to the end of its lane,
-    holds no disk and starts no more files. Its status item names the
-    location, such as "Waiting for \\\\nas\\media". Its report lists what is
-    not done. A hung call's result still decides its own file when Windows
-    returns it.
+    once. A location answers only when the open of its root returns
+    success, access denied or a sharing violation, because a person may
+    have rights only in a folder below the root (TinyTorrent2
+    `torrent-control-audit.md`, the fork's root check, for access denied;
+    the sharing violation is a lead decision, 2026-11-01). The root is opened
+    through the path as written: through its letter, including a `subst` or
+    mapped letter, and through its links. An open that returns any other
+    error means the location went away, and the location
+    is looked up again after a failure, so a removed `subst` or mapped
+    letter is found gone, not answering through the folder it named. A
+    location whose open has not returned gets no second open, and it
+    stays watched while none of its operations runs. The open of a link that
+    exists but cannot be followed, such as a junction to a removed drive,
+    means that the link's target does not answer; the engine never walks past
+    the link to its parent, which answers (TinyTorrent2
+    `torrent-control-audit.md` R-b, the `AbsentLink` check).
+  - **A missing entry is missing only while its location answers**
+    (TinyTorrent2 `docs/contracts/engine.md`, `d8c33be`, `12b99cf`,
+    `235594a`). Windows reports a drive or share that does not answer, and a
+    link whose target is gone, with the same codes as a missing file, and
+    with many other codes: TinyTorrent2's `DiskSpace.cs` and `12b99cf` list
+    2, 3, 15, 21, 53, 55, 64, 67, 121, 240, 1006, 1167, 1231, 1232, 1235 and
+    2250. So no code alone decides. A failed call asks its location again,
+    after the failure: only when the location answers is the error the
+    entry's own, such as "not found". Otherwise the entry waits for its
+    location. This covers every place where "not found" changes what the
+    engine does: a Delete or Move that counts an entry as already gone, a
+    copy that lists a source as not found, and a Sync or Mirror comparison
+    that reads a side as missing, which would otherwise copy everything or
+    delete what the source still holds.
+  - **The rest of the work goes on, as a compiler goes on after an error**
+    (owner ruling, 2026-11-01). The entries that need a location that does
+    not answer or went away are set aside, and the operation goes on with
+    its other entries; a Delete whose entries lie on several locations, such
+    as one from a search list, does each location's part on its own thread
+    (TinyTorrent2 `235594a`). Only when no remaining entry can run does the
+    operation become SetAside, as the operation state type says.
+    Every other operation, in both lanes, runs as usual. The status item
+    names the location, such as "Waiting for \\\\nas\\media", and the report
+    lists what is not done. A hung call keeps its thread, and the
+    operation's other entries go on, on another thread. The hung call's
+    result still decides its own file when Windows returns it.
   - A file that cannot be read, such as one on a bad sector, fails once and
     is listed, not tried again.
   - When the root open returns, or a location that went away answers one of
-    its tries every 30 seconds, its operations resume as Continue does. An
-    operation whose hung call has not returned waits for that call alone,
+    its tries every 30 seconds, its entries resume as Continue does. An
+    entry whose hung call has not returned waits for that call alone,
     because both would write the same file. One the person paused stays
     paused.
+  - **A resume happens once by itself; it never loops** (TinyTorrent2
+    `05b67fe`, and the torrent-control audit's invariant I9: every failure
+    ends, it never loops). Progress is counted per location's part of the
+    operation, because the operation's entries elsewhere keep adding bytes.
+    When that part fails again after its location's root open succeeded,
+    and before the part got further (more bytes or items done), the engine
+    does not resume it again, whatever error the files report: its entries
+    go to the question list with Retry, and the operation goes on with its
+    other entries. So a share whose root opens but whose files keep failing
+    with "network name deleted" is not retried every 30 seconds without
+    end. Time does not decide, because Windows can take minutes to report
+    an error from a share that hangs.
+  - **A recovery record names each end's volume, not only its letter**
+    (TinyTorrent2 `13-disk-discovery-plan.md`, "Missing torrent files").
+    Continue checks that each path still reaches the volume, by its GUID, or
+    the server it reached when saved. When another volume now holds the
+    letter, such as another USB drive, the operation waits for its own
+    volume as for a location that does not answer, and never writes to the
+    other one.
   - Exit never waits for a location. An operation that waits for its
     location after it started is saved at Exit and offered as Interrupted;
     one that never started changed no file and is not saved.
@@ -526,10 +590,13 @@ record.
   elevated start waits off the UI thread for the old process to end, then
   takes the data folder.
 - **Elevation is for the whole window** (owner ruling, 2026-11-01; Total
-  Commander elevates only the one operation). When Windows refuses an action
-  with access denied, the action asks at that point, as Total Commander does
-  at the refused file. An operation waits at the refused file and keeps its
-  recovery record. The question offers "Restart as administrator" in place
+  Commander elevates only the one operation). When Windows refuses a single
+  action, such as a Rename or a New folder, with access denied, its reply
+  asks at that point, as Total Commander does. A refused entry of an
+  operation does not stop the operation: its question goes into the question
+  list, the operation goes on with its other entries, and the refused
+  entries stay in its recovery record (nothing waits for the person, owner
+  ruling, 2026-11-01). The question offers "Restart as administrator" in place
   of Total Commander's "As Administrator", beside Total Commander's other
   answers. A standard account gets the offer too, as in Total Commander
   (owner ruling, 2026-11-01): Windows asks for an administrator's password,
@@ -556,8 +623,8 @@ record.
      and tabs, the running process's id, and the refused action, with a
      refused operation's recovery record. If the person declines the prompt
      or the start fails, the restart is cancelled: the window stays as it
-     was, its operations are untouched, and the refused file's question
-     shows again.
+     was, its operations are untouched, and the refused entries' question
+     stays in the question list.
   3. Only when the new process has started does the running process stop its
      operations, close its pipe, save its view state and end, within the
      10-second bound that starts then. The hand-over moves the refused
@@ -568,8 +635,9 @@ record.
      a bound longer than that process's 10 seconds, so it never gives up
      before a forced end. Then it takes the data folder and opens on those
      folders. As part of recovery, before any new
-     request, it continues the refused operation from its recovery record at
-     the refused file, as Continue does, and opens a refused folder again.
+     request, it continues the refused operation from its recovery record,
+     as Continue does, which reaches its refused entries, and opens a refused
+     folder again.
      An action that had changed nothing runs again from its captured request
      as part of that recovery. Other saved operations are offered as
      Interrupted, as after any Exit.
@@ -770,8 +838,8 @@ The scheduling rules are the engine's; these owner rulings of 2026-11-01 say
 what it must do ([ADR 0003](adr/0003-copy-and-delete-lanes.md)):
 
 - **Two lanes, one scheduler.** Transfers (Copy, a Move to another volume, Sync, Mirror) and
-  Deletes wait in separate lanes. A Delete never waits for a transfer and a
-  transfer never waits for a Delete. Each lane counts its own users of each
+  Deletes wait in separate lanes. A Delete never waits for a transfer's disk
+  and a transfer never waits for a Delete. Each lane counts its own users of each
   disk, against Transfers per device or Deletes per device: the person's
   settings, from 1 to 3, default 1. In goz a Delete takes no disk and never
   waits (`prepare.rs`); here the Delete lane is part of the engine from the
@@ -782,12 +850,57 @@ what it must do ([ADR 0003](adr/0003-copy-and-delete-lanes.md)):
   once, with its own status item and Stop. goz admits a rename and a
   same-volume move like a transfer, so at the default of 1 transfer per device
   an F2 would wait behind a running copy (lead decision, 2026-11-01).
-- **The lanes do not order one against the other** (owner ruling,
-  2026-11-01). A Copy, Sync or Mirror reads its sources when it runs (goz
-  D11), so a Delete that runs first removes entries a waiting transfer would
-  have read, and that transfer's report lists them as not found. This is the
-  designed behavior. A Rename or a same-volume Move of such an entry follows
-  the same rule (lead decision from that ruling, 2026-11-01).
+- **A Delete waits for a transfer only for the entries the person queues**
+  (owner ruling, 2026-11-01, which replaces the earlier ruling that
+  the lanes never order one against the other). A Copy, Move, Sync or Mirror
+  reads its sources when it runs (goz D11). So when the person deletes
+  entries that a transfer that has not ended still reads or writes, the
+  one Delete question the person already gets says so, such as "12 of these
+  items are queued to be copied to D:\Backup", below its usual text. The
+  buttons are aligned right, in the order Queue, Delete, Cancel. Queue and
+  the note appear only when entries are queued, and then Queue is the
+  default, so Enter queues. Otherwise the question shows Delete and Cancel,
+  with Delete as the default. Because the buttons are aligned right, Delete
+  and Cancel keep their places in both cases (owner rulings, 2026-11-01). The
+  question shows the facts of the moment it opened and does not change while
+  it is open; a Queue whose transfer ended meanwhile deletes at once. The
+  person is asked once, never a second time. With Delete or Queue, the Delete's other entries are deleted
+  at once.
+  - **The shared part of the tree.** An entry is used by a transfer when it
+    is, lies inside or contains one of the transfer's sources or the
+    destination entries it writes; for a Mirror, its whole destination
+    folder. Example: a queued Copy reads `C:\Work\Photos`, and the person
+    deletes `C:\Work` and chooses Queue. The Delete removes everything in
+    `C:\Work` except `C:\Work\Photos`, and `C:\Work` stays because it is
+    not empty (goz D3). After the Copy, the Delete removes
+    `C:\Work\Photos`, and then `C:\Work`. The engine compares identities it already holds, those of
+    the panel's folder and of each transfer's captured entries, so the check
+    reads no disk.
+  - **Queue** keeps the held part in the Delete's own operation,
+    whose status item says what it waits for, such as "Waiting for the copy
+    to D:\Backup". It holds no disk and blocks nothing while it waits.
+    When the transfer ends, the Delete deletes the held entries that the
+    transfer writes, whatever its outcome, and of the entries it reads only
+    those it finished. A read entry the transfer failed, skipped or never
+    reached, because it was stopped or failed, stays on disk, and the
+    Delete's report lists it as kept because its copy did not finish. The
+    Delete's recovery record keeps the held part with its transfer, so at
+    the next start it follows that transfer: it waits again if the person
+    continues the transfer. If the transfer is dismissed or was not saved,
+    the Delete deletes the held entries the transfer writes and keeps the
+    entries it reads.
+    A held entry that several transfers use waits for each of them, and is
+    deleted only when every one of their rules allows it. So an entry that
+    one transfer writes and another has still to read stays until the
+    reader has finished it.
+  - **Delete** deletes those entries too, and the transfer's report
+    lists them as not found.
+  - A transfer that has not ended is one in any mode except Ended,
+    Interrupted included. The held part waits for it whatever its mode,
+    because the held entries are the only work that waits, and the
+    person chose Queue.
+  - A Rename or a same-volume Move of such an entry runs at once, as in
+    Total Commander, and the transfer's report lists the entry as not found.
 - **The person orders the queue; the engine decides the threads.** Moving a
   waiting operation ahead of a running one in the same lane on the same disk
   starts it and pauses the running one, which resumes, with its progress, when
@@ -809,16 +922,30 @@ what it must do ([ADR 0003](adr/0003-copy-and-delete-lanes.md)):
 - **Stop keeps finished work.** Each operation's status bar item has its own
   Stop. The report says how far the operation got, such as "Stopped: 37 of
   120 copied". Stop asks nothing.
-- **Mirror asks once before it deletes.** When a Mirror's comparison ends with
-  entries to delete, the engine waits before copying anything, holding no
-  disks. `Operations.State` queues one question through the dialog entry
-  point, and the status bar item says that Mirror waits for an answer:
+- **Nothing waits for the person** (owner ruling, 2026-11-01). Total
+  Commander stops a copy at each question, such as an existing file or an
+  access denied; SynapseCommander never does, an approved departure. A
+  question goes into one question list, which `Operations.State` owns. A
+  quiet notification says that questions wait, and the person opens the
+  list from it. Meanwhile every task that can be done is done: the
+  operation goes on with its other entries, and the rest of its lane and
+  the other lane go on, as a compiler reports an error and compiles the
+  rest. An entry that waits for an answer stays as it was and stays in the
+  operation's recovery record. An operation whose remaining entries all
+  wait for answers or for their locations is SetAside, as the operation
+  state type says, and an answer lets the entries it answers run. A hung job holds only its own entry. The list and the
+  notification are prototyped and approved like every UI.
+- **Mirror asks once before it deletes, and copies meanwhile.** When a
+  Mirror's comparison ends with entries to delete, its question goes into
+  the question list, and the Mirror does its copies and updates while the
+  question waits. It deletes only after Delete them, and only after every
+  required copy succeeded (goz D13). The question:
   - Title: "Mirror C:\Work to D:\Backup\Work".
   - Text: "Mirror will permanently delete 1,240 files and 85 folders (3.2 GB)
     from D:\Backup\Work because they aren't in C:\Work."
   - Buttons: Delete them, Cancel Mirror, and Keep them as the default Close
-    button, so Enter and Esc delete nothing. Keep them finishes the same
-    comparison as a Sync.
+    button, so Enter and Esc delete nothing. Keep them ends the Mirror as a
+    Sync of the same comparison; Cancel Mirror stops it as Stop does.
 
   A Mirror with nothing to delete never asks. The engine's per-file checks
   before each deletion still run after the answer, so a destination that
@@ -826,30 +953,41 @@ what it must do ([ADR 0003](adr/0003-copy-and-delete-lanes.md)):
   carries the file count, the folder count and the bytes to delete; goz's
   `ComparisonSummary` counts files and folders together and has no bytes.
 
-  A Mirror that waits for its answer has changed no file. Stop and Cancel all
-  copies end it and withdraw its question, whether the question is open or
-  waits behind another dialog. An answer that arrives after the Mirror ended
-  is refused and does nothing. At Exit it is a waiting operation.
+  Stop and Cancel all copies end a Mirror and withdraw its question. An
+  answer that arrives after the Mirror ended is refused and does nothing. A
+  Mirror saved at Exit keeps its roots and its intent, not its answer, so
+  Continue compares again and asks again (goz DESIGN "Saved operations").
 - **An operation is saved at Exit when it has a recovery record,** that is,
   once it has started to change files, whatever its mode: running, yielded,
-  paused, or waiting for its location. These are offered as Interrupted at
-  the next start (B16). An operation that has changed no file, such as one
-  that waits for its turn or for the Mirror answer, or one paused before it
-  started, is not saved, as in goz DESIGN "Interrupted operations"; the Exit
-  question lists it as not going to run.
+  paused or set aside. These are offered as
+  Interrupted at the next start (B16). An operation that has changed no
+  file, such as one that waits for its turn or one paused before it started,
+  is not saved, as in goz DESIGN "Interrupted operations"; the Exit question
+  lists it as not going to run.
 - **One state type holds each operation's mode.** In `Syno.Files` an
-  operation is Preparing, Waiting, Running, Yielded, WaitingForAnswer,
-  Stopping, Ended or Interrupted (after a restart, until Continue or
-  Dismiss). The person's pause, a wait for a location that does not answer
-  and the existence of a recovery record are separate facts. One function
-  changes the mode. `FilesChecks` runs sequences of the events above (Stop,
-  Cancel all, pause, resume, a move up or down, a limit change, a Mirror
-  answer, a location that stops and starts answering, Exit, Continue,
+  operation is Preparing, Waiting, Running, Yielded, SetAside (no remaining
+  entry can run, because each waits for an answer, for its location, or
+  for the transfers it was queued behind; it
+  moves to the end of its lane, holds no disk and blocks nothing, and when
+  an entry can run again it asks for admission from there, as Resume does;
+  its status item names what it waits for, such as "Waiting for
+  \\\\nas\\media" or "Waiting for your answer"), Stopping, Ended or
+  Interrupted (after a
+  restart, until Continue or Dismiss). The person's pause, the entries that
+  wait for a location and the existence of a recovery record are separate
+  facts. One function changes the mode. `FilesChecks` runs sequences of the
+  events above (Stop, Cancel all, pause, resume, a move up or down, a limit
+  change, an answer from the question list, a location that stops and
+  starts answering, the end of a transfer that a queued Delete part waits
+  for, Exit, Continue,
   Dismiss, a new request during recovery) and checks after each step: no
   lane runs more moving operations on a disk than its limit, except while a
   lowered limit drains or while an operation that moved again finishes its
   current file; a person's pause survives every event except Stop and Cancel
-  all; a
+  all; an entry that waits for an answer or for its location never keeps
+  another entry or operation from running; no location's part of an
+  operation resumes by itself a second time after its root opened and
+  without progress of that part in between; a
   Mirror deletes nothing before its answer; Exit saves exactly the operations
   with a recovery record, except one handed to a restarted process; one
   recovery record is held by one process only; no new request runs before
@@ -859,6 +997,84 @@ what it must do ([ADR 0003](adr/0003-copy-and-delete-lanes.md)):
   dialog,** and it ends in a typed outcome: done, cancelled, refused, or failed
   with a reason. gozler-ui's service fixes ran and were forgotten, so a
   refused prompt showed nothing (`service-repair.md`).
+
+### Drag and drop
+
+A drag follows the window rules: no step of it waits on the UI thread, and
+no step reads every dragged file before it is needed (lead decision,
+2026-11-01).
+
+- **A drag captures its entries once,** when it starts, as a command does:
+  the marked entries, or the entry under the pointer, and their folder. The
+  drag owns that capture until it ends, so a refresh or a new listing during
+  the drag never changes what it carries (B11 "source lifetime").
+- **A drag out of SynapseCommander is File Explorer's drag, built without
+  reading the disk,** as gozler-ui builds it (goz DESIGN "Dragging";
+  `window-responsiveness.md` rank 7, issue #87, fixed in `89891df`).
+  `SHParseDisplayName` names each path through a bind context whose
+  `STR_FILE_SYS_BIND_DATA` carries the row's find data: the folder
+  attribute, the attributes, the size and the date modified, which the
+  listing already read. So the shell does not read each entry: goz measured
+  685–1,130 ms for 1,000 files without the find data and 9.6 ms with it.
+  `SHCreateDataObject` makes the shell's own data object, so the target gets
+  `CF_HDROP` and the Shell IDList Array, as from File Explorer, and
+  `SHDoDragDrop` runs the drag with the shell's drag image. WinUI's
+  `DataPackage.SetStorageItems` is not used, because it needs one
+  `StorageFile` per entry, and each one asks the file system. A deleted
+  entry is dragged too, and the target reports it; a path the shell cannot
+  name is left out, and the window reports it after the drop.
+- **A drag has no entry limit,** as in Total Commander; gozler-ui's limit of
+  1,000 is not copied. Naming costs about 10 µs per entry, so up to the
+  window rules' shared size for a pass the window names the entries inline.
+  A larger drag names them as a `Shared.Work` task over the capture, and the
+  drag starts when the data object is ready, if the button is still down.
+  A drag of a selection that is still being read drags nothing.
+- **A drag inside SynapseCommander takes the captured entries directly,**
+  from a panel or the search results to a panel, a folder row or a tab. The
+  drop reads nothing back from the data package.
+- **The drop effect shown while the pointer moves uses only facts the window
+  already holds:** the row under the pointer, its kind from the listing, the
+  dragged paths and the modifier keys. For a drag from another program, the
+  paths are the ones its data offers when the pointer enters. Data without
+  file paths, such as an e-mail attachment, shows "not allowed". The effect
+  never reads the disk. The targets, effects, modifier keys and defaults
+  follow Total Commander, as stage 2 records them.
+- **An incoming drop from another program follows gozler-ui's drop rules**
+  (goz DESIGN "Dragging", "Dropping into Gozler"; `b974bcb`, `c90aa4d`).
+  These come from real sources and are not obvious:
+  - The drop reads the paths again after the button is released, on a
+    thread of its own through an agile reference, because a source such as
+    7-Zip makes its files only then. The window starts the operation when
+    the paths arrive and never waits for the source.
+  - SynapseCommander moves the files itself, so a move is reported to the
+    source as an optimized move, never as move, which would make the source
+    delete its originals too.
+  - A source that works synchronously deletes the files it made for the drag
+    as soon as the drop returns. So its drop returns only when the operation
+    ends, while the window keeps running. That source stays frozen as long
+    as the operation lasts, also while an entry waits for an answer or for
+    its location, so the operation's status item and its questions name the
+    held program, such as "7-Zip waits until this copy ends".
+  - A source that works asynchronously gets `StartOperation` at once and
+    `EndOperation` with the effect when the operation ends, called off the
+    UI thread.
+  - The window's own drag is never held, because its files are the
+    person's and no source deletes them. The shell's data object it carries
+    reports no asynchronous capability, so the drop recognizes it by COM
+    identity (`IUnknown`) against the drag's own object.
+  - While a modal dialog is open, the window accepts no drop.
+  - The list scrolls while the pointer rests near its top or bottom edge.
+
+  WinUI's drop events may not reach all of this: an optimized move, a drop
+  held until its operation ends, and the source's asynchronous capability.
+  Stage 2 checks them and records the result. Where WinUI cannot, the window
+  takes the drop through the shell's OLE drop target in `Shared.Desktop`, as
+  gozler-ui does. Its `DragEnter` runs on the UI thread, so it reads the
+  source's file list on `Shared.Desktop`'s thread and shows "not allowed"
+  until the list arrives.
+- **A drop request goes to the engine as a command does,** with the captured
+  entries and the folder under the pointer. A drop onto a location that does
+  not answer waits in the engine, not in the window.
 
 ### Flow of a listing and a command
 
@@ -921,7 +1137,14 @@ Closing behavior is explicit:
 
 The stop protocol follows goz `docs/DESIGN.md`'s copy cancellation and
 unfinished-output rules: a stopped copy removes only its own unfinished file,
-and an interrupted copy resumes inside the file.
+and an interrupted copy resumes inside the file. A Move across volumes also
+flushes each copied file to disk before it deletes that file's source
+(TinyTorrent2 `a484e66`, lead decision, 2026-11-01). Without the flush, a
+power loss can keep the source's deletion and lose the copy's data, which
+was still in the cache. This departs from goz, whose D10 flushes no normal
+copy and whose Move does not flush either; a Copy here keeps goz's rule,
+because its source stays. Stage 1 measures what the flush costs a Move of
+small files.
 
 ## Dependency and release contract
 
